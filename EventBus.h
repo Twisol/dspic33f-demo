@@ -3,9 +3,19 @@
 
 #include <stdint.h>
 
-typedef void (*EventHandler)();
+typedef union Event {
+  void* ptr;
 
-void EventBus_Signal(uint8_t type);
+  uint16_t uint16;
+  uint8_t uint8;
+
+  int16_t int16;
+  int8_t int8;
+} Event;
+
+typedef void (*EventHandler)(Event event);
+
+void EventBus_Signal(uint8_t type, Event event);
 void EventBus_SetHook(uint8_t type, EventHandler handler);
 void EventBus_Tick();
 

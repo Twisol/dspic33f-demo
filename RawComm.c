@@ -9,12 +9,13 @@
 #include "EventBus.h"
 #include "EventTypes.h"
 
+#include "drivers/PushButtons.h"
+#include "drivers/LCD.h"
+#include "drivers/LED.h"
+#include "drivers/Timer.h"
 
-enum {
-  HIGH_PRIORITY = 7,
-  MID_PRIORITY = 4,
-  LOW_PRIORITY = 1,
-};
+#define DEFAULT_PRIORITY 3
+
 
 void RawComm_LCD_Init() {
   __delay_ms(30);
@@ -44,39 +45,71 @@ void RawComm_LED_Toggle(uint8_t bitvector) {
 }
 
 
-static PushButtonHandler buttonHandler = 0;
-void RawComm_PushButton_EventHandler() {
-  IPC4bits.CNIP = LOW_PRIORITY;
-  if (buttonHandler) {
-    buttonHandler();
-  }
-  IPC4bits.CNIP = MID_PRIORITY;
+void RawComm_PushButton_EventHandler(Event ev) {
+  PushButton_EventHandler(ev.uint8);
 }
 
-void RawComm_PushButton_Init(PushButtonHandler hook) {
+void RawComm_PushButton_Init() {
+  // Enable push buttons
   // Note that button 3 conflicts with LED 8, so we don't enable it.
-  TRISD = TRISD | 0x1060;
-
   CNEN1bits.CN15IE = 0b1; // Button 1
   CNEN2bits.CN16IE = 0b1; // Button 2
+  // CNEN2bits.CN23IE = 0b1; // Button 3
   CNEN2bits.CN19IE = 0b1; // Button 4
 
+  // Enable interrupts
   IFS1bits.CNIF = 0b0;
-  IPC4bits.CNIP = MID_PRIORITY;
+  IPC4bits.CNIP = DEFAULT_PRIORITY;
   IEC1bits.CNIE = 0b1;
 
   // Associate hook with PushButton events
-  buttonHandler = hook;
   EventBus_SetHook(EVT_BUTTON, &RawComm_PushButton_EventHandler);
 }
 
 void __attribute__((interrupt,no_auto_psv)) _CNInterrupt() {
-  IFS1bits.CNIF = 0;
+  if (IFS1bits.CNIF == 0)
+    return;
+  IFS1bits.CNIF = 0b0;
 
   // Push an event to the event queue
-  EventBus_Signal(EVT_BUTTON);
+  Event ev;
+  ev.uint16 = 0x0000;
+  EventBus_Signal(EVT_BUTTON, ev);
 }
 
-void RawComm_Init() {
-  SRbits.IPL = MID_PRIORITY;
+
+void RawComm_Timer_EventHandler(Event ev) {
+  Timer_EventHandler();
+}
+
+void RawComm_Timer_Init(uint32_t period_us) {
+  // Set timing mode
+  T2CONbits.TCS = 0b0;
+  T2CONbits.TGATE = 0b0;
+  T2CONbits.TCKPS = 0b00;
+
+  TMR2 = 0;
+  PR2 = (uint16_t)(period_us*FCY/1000000ULL);
+
+  // Enable interrupts
+  IFS0bits.T2IF = 0b0;
+  IPC1bits.T2IP = DEFAULT_PRIORITY;
+  IEC0bits.T2IE = 0b1;
+
+  // Enable timer
+  T2CONbits.TON = 0b1;
+
+  EventBus_SetHook(EVT_TIMER, RawComm_Timer_EventHandler);
+}
+
+void __attribute__((interrupt,no_auto_psv)) _T2Interrupt() {
+  if (IFS0bits.T2IF == 0) {
+    return;
+  }
+  IFS0bits.T2IF = 0b0;
+
+  // Push an event to the event queue
+  Event ev;
+  ev.uint16 = 0x0000;
+  EventBus_Signal(EVT_TIMER, ev);
 }

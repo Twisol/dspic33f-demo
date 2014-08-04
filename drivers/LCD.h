@@ -1,6 +1,16 @@
 #ifndef LCD_H
 #define	LCD_H
 
+#include "LCD.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+
+// Imported API
+void RawComm_LCD_Init();
+void RawComm_LCD_Send(bool is_data, bool do_read, uint64_t delay, uint16_t payload);
+
+// Exported API
 typedef enum lcd_display_mode_t {
   LCD_DISPLAY_BLINK_CURSOR = 0x07,
   LCD_DISPLAY_WITH_CURSOR = 0x06,

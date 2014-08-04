@@ -1,50 +1,62 @@
 #include <stdint.h>        /* Includes uint16_t definition                    */
 #include <stdbool.h>       /* Includes true/false definition                  */
 
-#include <xc.h>            /* Register access */
 #include <libpic30.h>      /* __delay32 and friends */
 
 #include "EventBus.h"
 #include "EventTypes.h"
-#include "drivers/LCD.h"
-#include "drivers/LED.h"
-
 #include "RawComm.h"
 
+#include "drivers/LCD.h"
+#include "drivers/LED.h"
+#include "drivers/PushButtons.h"
+#include "drivers/Timer.h"
 
-void PushButton_Init(PushButtonHandler handler) {
-  RawComm_PushButton_Init(handler);
-}
+
+static int count = -1;
 
 void buttonHandler() {
-  LCD_PutString("Hello!");
+  // Display the current number (with digits reversed...)
+  LCD_Display_Clear();
+
+  int tmp = count;
+  if (tmp == 0) {
+    LCD_PutChar('0');
+    return;
+  }
+
+  while (tmp != 0) {
+    int digit = tmp % 10;
+    tmp /= 10;
+    LCD_PutChar(digit + '0');
+  }
 }
 
-static int count = 0;
 void timerHandler() {
   // Display the current number
-  LED_Toggle(count);
   count += 1;
+  LED_Toggle(count);
+
+  Timer_Defer(500, &timerHandler);
 }
 
 int main() {
-  RawComm_Init();
+  EventBus_Init();
 
   LED_Init();
-  
-  PushButton_Init(&buttonHandler);
 
   LCD_Init();
   LCD_Display_Mode(LCD_DISPLAY_NO_CURSOR);
   LCD_Display_Clear();
   LCD_Draw_Mode(LCD_CURSOR_RIGHT, LCD_SHIFT_DISPLAY_OFF);
 
-  EventBus_SetHook(EVT_TIMER, timerHandler);
+  PushButton_Init(&buttonHandler);
 
-  while (1) {
-    EventBus_Signal(EVT_TIMER);
+  Timer_Init(1000);
+  Timer_Defer(500, &timerHandler);
+
+  while(1) {
     EventBus_Tick();
-    __delay_ms(500);
   }
 
   /*while (1) {

@@ -7,6 +7,8 @@
       <logicalFolder name="drivers" displayName="drivers" projectFiles="true">
         <itemPath>drivers/LCD.h</itemPath>
         <itemPath>drivers/LED.h</itemPath>
+        <itemPath>drivers/PushButtons.h</itemPath>
+        <itemPath>drivers/Timer.h</itemPath>
       </logicalFolder>
       <itemPath>EventBus.h</itemPath>
       <itemPath>RawComm.h</itemPath>
@@ -22,6 +24,8 @@
       <logicalFolder name="drivers" displayName="drivers" projectFiles="true">
         <itemPath>drivers/LCD.c</itemPath>
         <itemPath>drivers/LED.c</itemPath>
+        <itemPath>drivers/PushButtons.c</itemPath>
+        <itemPath>drivers/Timer.c</itemPath>
       </logicalFolder>
       <itemPath>configuration_bits.c</itemPath>
       <itemPath>main.c</itemPath>

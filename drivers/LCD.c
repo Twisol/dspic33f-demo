@@ -3,9 +3,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-extern void RawComm_LCD_Init();
-extern void RawComm_LCD_Send(bool is_data, bool do_read, uint64_t delay, uint16_t payload);
-
 
 // Local definitions not exposed to the user
 typedef enum lcd_comand_t {
