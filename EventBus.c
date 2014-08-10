@@ -32,7 +32,7 @@ void EventBus_Tick() {
       EventHandler hook = hookTable[i];
 
       Event event = eventTable[i];
-      eventTable[i] = 0;
+      eventTable[i].ptr = 0;
       signalTable[i] = false;
 
       if (hook) {

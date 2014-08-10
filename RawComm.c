@@ -13,6 +13,7 @@
 #include "drivers/LCD.h"
 #include "drivers/LED.h"
 #include "drivers/Timer.h"
+#include "drivers/UART.h"
 
 #define DEFAULT_PRIORITY 3
 
@@ -103,7 +104,7 @@ void RawComm_Timer_Init(uint32_t period_us) {
 }
 
 void __attribute__((interrupt,no_auto_psv)) _T2Interrupt() {
-  if (IFS0bits.T2IF == 0) {
+  if (IFS0bits.T2IF == 0b0) {
     return;
   }
   IFS0bits.T2IF = 0b0;
@@ -112,4 +113,45 @@ void __attribute__((interrupt,no_auto_psv)) _T2Interrupt() {
   Event ev;
   ev.uint16 = 0x0000;
   EventBus_Signal(EVT_TIMER, ev);
+}
+
+
+void RawComm_UART_EventHandler(Event ev) {
+  UART_EventHandler(ev.uint8);
+}
+
+void RawComm_UART_Init() {
+  U2MODEbits.ABAUD = 0b0;
+  U2MODEbits.BRGH = 0b0;
+  U2BRG = (FCY/9600)/16 - 1;
+
+  U2MODEbits.STSEL = 0b0;
+  U2MODEbits.PDSEL = 0b00;
+  U2STAbits.URXISEL = 0b0;
+
+  IFS1bits.U2RXIF = 0b0;
+  IPC7bits.U2RXIP = DEFAULT_PRIORITY;
+  IEC1bits.U2RXIE = 0b1;
+
+  U2MODEbits.UEN = 0b10;
+  U2MODEbits.UARTEN = 0b1;
+  U2STAbits.UTXEN = 0b1;
+
+  EventBus_SetHook(EVT_UART, RawComm_UART_EventHandler);
+}
+
+void RawComm_UART_PutChar(uint8_t ch) {
+  U2TXREG = ch;
+}
+
+void __attribute__((interrupt,no_auto_psv)) _U2RXInterrupt() {
+  if (IFS1bits.U2RXIF == 0b0) {
+    return;
+  }
+  IFS1bits.U2RXIF = 0b0;
+
+  // Push an event to the event queue
+  Event ev;
+  ev.uint8 = U2RXREG; // Read (and automatically clear) the received character
+  EventBus_Signal(EVT_UART, ev);
 }

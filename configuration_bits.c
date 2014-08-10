@@ -35,7 +35,7 @@
 #pragma config GSS = OFF                // General Segment Code Protection (User program memory is not code-protected)
 
 // FOSCSEL
-#pragma config FNOSC = LPRCDIVN         // Oscillator Mode (Internal Fast RC (FRC) with divide by N)
+#pragma config FNOSC = FRC              // Oscillator Mode (Internal Fast RC (FRC))
 #pragma config IESO = ON                // Two-speed Oscillator Start-Up Enable (Start up with FRC, then switch)
 
 // FOSC
