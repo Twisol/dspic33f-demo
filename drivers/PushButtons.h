@@ -3,9 +3,6 @@
 
 #include <stdint.h>
 
-// Imported API
-void RawComm_PushButton_Init();
-
 // Exported API
 typedef void (*PushButtonHandler)();
 

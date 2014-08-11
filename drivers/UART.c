@@ -3,7 +3,6 @@
 static UARTHandler uartHandler = 0;
 void UART_Init(UARTHandler handler) {
   uartHandler = handler;
-  RawComm_UART_Init();
 }
 
 void UART_PutChar(uint8_t ch) {

@@ -29,8 +29,6 @@ typedef enum lcd_font_width_t {
 
 
 void LCD_Init() {
-  RawComm_LCD_Init();
-  
   RawComm_LCD_Send(false, false, 40,
         CMD_FUNCTION_SET
       | DL_8BIT

@@ -7,7 +7,6 @@
 #include <stdint.h>
 
 // Imported API
-void RawComm_LCD_Init();
 void RawComm_LCD_Send(bool is_data, bool do_read, uint64_t delay, uint16_t payload);
 
 // Exported API

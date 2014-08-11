@@ -18,6 +18,9 @@
 #define DEFAULT_PRIORITY 3
 
 
+static EventBus* g_eventBus = 0;
+
+
 void RawComm_LCD_Init() {
   __delay_ms(30);
   TRISE = TRISE &~ 0x00FF; // Enable LCD output
@@ -64,7 +67,7 @@ void RawComm_PushButton_Init() {
   IEC1bits.CNIE = 0b1;
 
   // Associate hook with PushButton events
-  EventBus_SetHook(EVT_BUTTON, &RawComm_PushButton_EventHandler);
+  EventBus_SetHook(g_eventBus, EVT_BUTTON, &RawComm_PushButton_EventHandler);
 }
 
 void __attribute__((interrupt,no_auto_psv)) _CNInterrupt() {
@@ -75,7 +78,7 @@ void __attribute__((interrupt,no_auto_psv)) _CNInterrupt() {
   // Push an event to the event queue
   Event ev;
   ev.uint16 = 0x0000;
-  EventBus_Signal(EVT_BUTTON, ev);
+  EventBus_Signal(g_eventBus, EVT_BUTTON, ev);
 }
 
 
@@ -100,7 +103,7 @@ void RawComm_Timer_Init(uint32_t period_us) {
   // Enable timer
   T2CONbits.TON = 0b1;
 
-  EventBus_SetHook(EVT_TIMER, RawComm_Timer_EventHandler);
+  EventBus_SetHook(g_eventBus, EVT_TIMER, RawComm_Timer_EventHandler);
 }
 
 void __attribute__((interrupt,no_auto_psv)) _T2Interrupt() {
@@ -112,7 +115,7 @@ void __attribute__((interrupt,no_auto_psv)) _T2Interrupt() {
   // Push an event to the event queue
   Event ev;
   ev.uint16 = 0x0000;
-  EventBus_Signal(EVT_TIMER, ev);
+  EventBus_Signal(g_eventBus, EVT_TIMER, ev);
 }
 
 
@@ -137,7 +140,7 @@ void RawComm_UART_Init() {
   U2MODEbits.UARTEN = 0b1;
   U2STAbits.UTXEN = 0b1;
 
-  EventBus_SetHook(EVT_UART, RawComm_UART_EventHandler);
+  EventBus_SetHook(g_eventBus, EVT_UART, RawComm_UART_EventHandler);
 }
 
 void RawComm_UART_PutChar(uint8_t ch) {
@@ -153,5 +156,16 @@ void __attribute__((interrupt,no_auto_psv)) _U2RXInterrupt() {
   // Push an event to the event queue
   Event ev;
   ev.uint8 = U2RXREG; // Read (and automatically clear) the received character
-  EventBus_Signal(EVT_UART, ev);
+  EventBus_Signal(g_eventBus, EVT_UART, ev);
+}
+
+
+void RawComm_Init(EventBus* eventBus, uint16_t clockPeriod) {
+  g_eventBus = eventBus;
+
+  RawComm_LED_Init();
+  RawComm_LCD_Init();
+  RawComm_UART_Init();
+  RawComm_PushButton_Init();
+  RawComm_Timer_Init(clockPeriod);
 }

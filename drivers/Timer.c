@@ -15,10 +15,6 @@ static TimerEventHandler callbackTable[32] = {
   0, 0, 0, 0, 0, 0, 0, 0,
 };
 
-void Timer_Init(uint16_t period) {
-  RawComm_Timer_Init(period);
-}
-
 int16_t Timer_Defer(uint16_t ticks, TimerEventHandler callback) {
   // Look for an unused slot
   uint8_t id;

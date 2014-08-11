@@ -3,6 +3,7 @@
 
 #include "EventBus.h"
 #include "EventTypes.h"
+#include "RawComm.h"
 
 #include "drivers/LCD.h"
 #include "drivers/LED.h"
@@ -43,23 +44,22 @@ void inputHandler(uint8_t ch) {
 }
 
 int main() {
-  EventBus_Init();
+  EventBus eventBus;
+  EventBus_Init(&eventBus);
 
-  LED_Init();
+  RawComm_Init(&eventBus, 1000/*us*/);
 
   LCD_Init();
   LCD_Display_Mode(LCD_DISPLAY_NO_CURSOR);
   LCD_Display_Clear();
   LCD_Draw_Mode(LCD_CURSOR_RIGHT, LCD_SHIFT_DISPLAY_OFF);
 
-  UART_Init(inputHandler);
-
+  UART_Init(&inputHandler);
   PushButton_Init(&buttonHandler);
 
-  Timer_Init(1000/*us*/);
   Timer_Defer(500, &timerHandler);
 
   while(1) {
-    EventBus_Tick();
+    EventBus_Tick(&eventBus);
   }
 }

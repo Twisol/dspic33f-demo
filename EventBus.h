@@ -2,6 +2,7 @@
 #define	EVENTQUEUE_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef union Event {
   void* ptr;
@@ -15,9 +16,15 @@ typedef union Event {
 
 typedef void (*EventHandler)(Event event);
 
-void EventBus_Signal(uint8_t type, Event event);
-void EventBus_SetHook(uint8_t type, EventHandler handler);
-void EventBus_Tick();
+typedef struct EventBus {
+  EventHandler hookTable[32];
+  bool signalTable[32];
+  Event eventTable[32];
+} EventBus;
+
+void EventBus_Signal(EventBus* self, uint8_t type, Event event);
+void EventBus_SetHook(EventBus* self, uint8_t type, EventHandler handler);
+void EventBus_Tick(EventBus* self);
 
 #endif	/* EVENTQUEUE_H */
 
