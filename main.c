@@ -5,7 +5,7 @@
 #include "EventBus.h"
 #include "EventTypes.h"
 #include "RawComm.h"
-#include "Timer.h"
+#include "Defer.h"
 
 #include "drivers/LCD.h"
 #include "drivers/LED.h"
@@ -53,7 +53,7 @@ void timerHandler() {
   count += 1;
   LED_Toggle(count);
 
-  Timer_Defer(500, EVT_TIMER1);
+  Defer_Set(500, EVT_TIMER1);
 }
 
 void inputHandler(EventBus* bus, UartBuffer* uart) {
@@ -87,11 +87,11 @@ int main() {
   EventBus_Init(&eventBus);
   RawComm_Init(&eventBus, &uart);
 
-  Timer_Init(&eventBus, CLOCK_PERIOD);
+  Defer_Init(&eventBus, CLOCK_PERIOD);
   LCD_Init(LCD_DISPLAY_NO_CURSOR, LCD_CURSOR_RIGHT, LCD_SHIFT_DISPLAY_OFF);
   UART_Init(&uart);
 
-  Timer_Defer(500, EVT_TIMER1);
+  Defer_Set(500, EVT_TIMER1);
 
   while(1) {
     EventBus_Tick(&eventBus, &HandleEvent, NULL);

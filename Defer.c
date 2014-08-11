@@ -1,4 +1,4 @@
-#include "Timer.h"
+#include "Defer.h"
 
 #include <stdint.h>
 
@@ -15,12 +15,12 @@ static EventBus* g_eventBus = 0;
 static uint16_t diffUnderflow = 0;
 static uint16_t g_clockPeriod = 0;
 
-void Timer_Init(uint16_t clockPeriod, EventBus* eventBus) {
+void Defer_Init(uint16_t clockPeriod, EventBus* eventBus) {
   g_eventBus = eventBus;
   g_clockPeriod = clockPeriod;
 }
 
-bool Timer_Defer(uint16_t ticks, uint8_t signal) {
+bool Defer_Set(uint16_t ticks, uint8_t signal) {
   if (deferTable[signal] != 0) {
     return false;
   }
@@ -30,11 +30,11 @@ bool Timer_Defer(uint16_t ticks, uint8_t signal) {
   return true;
 }
 
-int16_t Timer_Cancel(int16_t id) {
+int16_t Defer_Clear(int16_t id) {
   deferTable[id] = 0;
 }
 
-void Timer_Tick(uint16_t timediff) {
+void Defer_Tick(uint16_t timediff) {
   timediff += diffUnderflow;
   diffUnderflow = timediff % g_clockPeriod;
 

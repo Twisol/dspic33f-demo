@@ -13,8 +13,8 @@
       <itemPath>EventBus.h</itemPath>
       <itemPath>RawComm.h</itemPath>
       <itemPath>EventTypes.h</itemPath>
-      <itemPath>Timer.h</itemPath>
       <itemPath>CircleBuffer.h</itemPath>
+      <itemPath>Defer.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LinkerScript"
                    displayName="Linker Files"
@@ -34,8 +34,8 @@
       <itemPath>traps.c</itemPath>
       <itemPath>EventBus.c</itemPath>
       <itemPath>RawComm.c</itemPath>
-      <itemPath>Timer.c</itemPath>
       <itemPath>CircleBuffer.c</itemPath>
+      <itemPath>Defer.c</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"

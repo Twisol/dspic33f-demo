@@ -9,7 +9,7 @@
 
 #include "EventBus.h"
 #include "EventTypes.h"
-#include "Timer.h"
+#include "Defer.h"
 
 #include "drivers/PushButtons.h"
 #include "drivers/LCD.h"
@@ -99,7 +99,7 @@ void __attribute__((interrupt,no_auto_psv)) _T2Interrupt() {
   }
   IFS0bits.T2IF = 0b0;
 
-  Timer_Tick(CLOCK_PERIOD);
+  Defer_Tick(CLOCK_PERIOD);
 }
 
 
