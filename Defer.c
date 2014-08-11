@@ -1,57 +1,50 @@
 #include "Defer.h"
 
 #include <stdint.h>
+#include <string.h>
 
 #include "EventBus.h"
 
-volatile static uint16_t deferTable[32] = {
-  0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0,
-};
 
-static EventBus* g_eventBus = 0;
-static uint16_t diffUnderflow = 0;
-static uint16_t g_clockPeriod = 0;
-
-void Defer_Init(uint16_t clockPeriod, EventBus* eventBus) {
-  g_eventBus = eventBus;
-  g_clockPeriod = clockPeriod;
+void Defer_Init(DeferTable* self, uint16_t clockPeriod, EventBus* eventBus) {
+  self->size = 32;
+  self->bus = eventBus;
+  self->clockPeriod = clockPeriod;
+  memset((uint16_t*)self->countdowns, 0, self->size*sizeof(uint16_t));
 }
 
-bool Defer_Set(uint16_t ticks, uint8_t signal) {
-  if (deferTable[signal] != 0) {
+bool Defer_Set(DeferTable* self, uint16_t ticks, uint8_t signal) {
+  if (self->countdowns[signal] != 0) {
     return false;
   }
 
-  deferTable[signal] = ticks;
+  self->countdowns[signal] = ticks;
 
   return true;
 }
 
-int16_t Defer_Clear(int16_t id) {
-  deferTable[id] = 0;
+int16_t Defer_Clear(DeferTable* self, int16_t id) {
+  self->countdowns[id] = 0;
 }
 
-void Defer_Tick(uint16_t timediff) {
-  timediff += diffUnderflow;
-  diffUnderflow = timediff % g_clockPeriod;
+void Defer_Tick(DeferTable* self, uint16_t timediff) {
+  timediff += self->diffUnderflow;
+  self->diffUnderflow = timediff % self->clockPeriod;
 
-  uint16_t msPassed = timediff / g_clockPeriod;
+  uint16_t msPassed = timediff / self->clockPeriod;
 
   uint8_t signal = 0;
-  for (signal = 0; signal < 32; ++signal) {
-    if (deferTable[signal] == 0) {
+  for (signal = 0; signal < self->size; ++signal) {
+    if (self->countdowns[signal] == 0) {
       continue;
     }
 
-    if (deferTable[signal] <= msPassed) {
-      EventBus_Signal(g_eventBus, signal);
+    if (self->countdowns[signal] <= msPassed) {
+      EventBus_Signal(self->bus, signal);
 
-      deferTable[signal] = 0;
+      self->countdowns[signal] = 0;
     } else {
-      deferTable[signal] -= msPassed;
+      self->countdowns[signal] -= msPassed;
     }
   }
 }

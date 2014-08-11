@@ -37,6 +37,7 @@ uint8_t* uitoa(uint16_t num, uint8_t* buf, size_t len) {
 static int count = -1;
 static EventBus eventBus;
 static UartBuffer uart;
+static DeferTable deferTable;
 
 void buttonHandler(UartBuffer* uart) {
   // Display the current number
@@ -48,12 +49,12 @@ void buttonHandler(UartBuffer* uart) {
   }
 }
 
-void timerHandler() {
+void timerHandler(DeferTable* deferTable) {
   // Display the current number
   count += 1;
   LED_Toggle(count);
 
-  Defer_Set(500, EVT_TIMER1);
+  Defer_Set(deferTable, 500, EVT_TIMER1);
 }
 
 void inputHandler(EventBus* bus, UartBuffer* uart) {
@@ -71,7 +72,7 @@ void inputHandler(EventBus* bus, UartBuffer* uart) {
 bool HandleEvent(void* self, uint8_t signal) {
   switch (signal) {
   case EVT_TIMER1:
-    timerHandler();
+    timerHandler(&deferTable);
     break;
   case EVT_BUTTON:
     buttonHandler(&uart);
@@ -85,13 +86,13 @@ bool HandleEvent(void* self, uint8_t signal) {
 
 int main() {
   EventBus_Init(&eventBus);
-  RawComm_Init(&eventBus, &uart);
+  Defer_Init(&deferTable, CLOCK_PERIOD, &eventBus);
 
-  Defer_Init(&eventBus, CLOCK_PERIOD);
+  RawComm_Init(&eventBus, &deferTable, &uart);
   LCD_Init(LCD_DISPLAY_NO_CURSOR, LCD_CURSOR_RIGHT, LCD_SHIFT_DISPLAY_OFF);
   UART_Init(&uart);
 
-  Defer_Set(500, EVT_TIMER1);
+  Defer_Set(&deferTable, 500, EVT_TIMER1);
 
   while(1) {
     EventBus_Tick(&eventBus, &HandleEvent, NULL);

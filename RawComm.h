@@ -4,9 +4,10 @@
 #include <stdint.h>
 
 #include "EventBus.h"
+#include "Defer.h"
 #include "drivers/UART.h"
 
-void RawComm_Init(EventBus* eventBus, UartBuffer* uart);
+void RawComm_Init(EventBus* eventBus, DeferTable* defer, UartBuffer* uart);
 
 #define CLOCK_PERIOD 1000 /* microseconds */
 

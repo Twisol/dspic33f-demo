@@ -22,6 +22,7 @@
 
 static EventBus* g_eventBus = NULL;
 static UartBuffer* g_uart = NULL;
+static DeferTable* g_deferTable = NULL;
 
 
 void RawComm_LCD_Init() {
@@ -99,7 +100,7 @@ void __attribute__((interrupt,no_auto_psv)) _T2Interrupt() {
   }
   IFS0bits.T2IF = 0b0;
 
-  Defer_Tick(CLOCK_PERIOD);
+  Defer_Tick(g_deferTable, CLOCK_PERIOD);
 }
 
 
@@ -142,9 +143,10 @@ void __attribute__((interrupt,no_auto_psv)) _U2RXInterrupt() {
 }
 
 
-void RawComm_Init(EventBus* eventBus, UartBuffer* uart) {
+void RawComm_Init(EventBus* eventBus, DeferTable* deferTable, UartBuffer* uart) {
   g_eventBus = eventBus;
   g_uart = uart;
+  g_deferTable = deferTable;
 
   RawComm_LED_Init();
   RawComm_LCD_Init();
