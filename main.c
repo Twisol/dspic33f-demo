@@ -1,33 +1,50 @@
-#include <stdint.h>        /* Includes uint16_t definition                    */
-#include <stdbool.h>       /* Includes true/false definition                  */
+#include <stddef.h>        /* NULL */
+#include <stdint.h>        /* /u?int[8|16|32|64]_t */
+#include <stdbool.h>       /* bool */
 
 #include "EventBus.h"
 #include "EventTypes.h"
 #include "RawComm.h"
+#include "Timer.h"
 
 #include "drivers/LCD.h"
 #include "drivers/LED.h"
 #include "drivers/PushButtons.h"
-#include "drivers/Timer.h"
 #include "drivers/UART.h"
 
 
+uint8_t* uitoa(uint16_t num, uint8_t* buf, size_t len) {
+  buf[len-1] = '\0';
+  uint8_t* itr = buf + len-2;
+
+  do {
+    itr -= 1;
+
+    if (itr < buf) {
+      itr = 0;
+      break;
+    }
+
+    int digit = num % 10;
+    num /= 10;
+    *itr = digit + '0';
+  } while (num > 0);
+
+  return itr;
+}
+
+
 static int count = -1;
+static EventBus eventBus;
+static UartBuffer uart;
 
-void buttonHandler() {
-  // Display the current number (with digits reversed...)
-  LCD_Display_Clear();
-
-  int tmp = count;
-  if (tmp == 0) {
-    LCD_PutChar('0');
-    return;
-  }
-
-  while (tmp != 0) {
-    int digit = tmp % 10;
-    tmp /= 10;
-    LCD_PutChar(digit + '0');
+void buttonHandler(UartBuffer* uart) {
+  // Display the current number
+  uint8_t buf[17];
+  uint8_t* res = uitoa(count, buf, 17);
+  if (res != 0) {
+    UART_PutString(uart, res);
+    UART_PutString(uart, "\r\n");
   }
 }
 
@@ -36,30 +53,47 @@ void timerHandler() {
   count += 1;
   LED_Toggle(count);
 
-  Timer_Defer(500, &timerHandler);
+  Timer_Defer(500, EVT_TIMER1);
 }
 
-void inputHandler(uint8_t ch) {
-  UART_PutChar(ch);
+void inputHandler(EventBus* bus, UartBuffer* uart) {
+  uint8_t str[32];
+  if (UART_GetString(uart, str, 32)) {
+    UART_PutString(uart, str);
+  }
+
+  if (UART_GetCount(uart) > 0) {
+    EventBus_Signal(bus, EVT_UART);
+  }
 }
+
+
+bool HandleEvent(void* self, uint8_t signal) {
+  switch (signal) {
+  case EVT_TIMER1:
+    timerHandler();
+    break;
+  case EVT_BUTTON:
+    buttonHandler(&uart);
+    break;
+  case EVT_UART:
+    inputHandler(&eventBus, &uart);
+    break;
+  }
+}
+
 
 int main() {
-  EventBus eventBus;
   EventBus_Init(&eventBus);
+  RawComm_Init(&eventBus, &uart);
 
-  RawComm_Init(&eventBus, 1000/*us*/);
+  Timer_Init(&eventBus, CLOCK_PERIOD);
+  LCD_Init(LCD_DISPLAY_NO_CURSOR, LCD_CURSOR_RIGHT, LCD_SHIFT_DISPLAY_OFF);
+  UART_Init(&uart);
 
-  LCD_Init();
-  LCD_Display_Mode(LCD_DISPLAY_NO_CURSOR);
-  LCD_Display_Clear();
-  LCD_Draw_Mode(LCD_CURSOR_RIGHT, LCD_SHIFT_DISPLAY_OFF);
-
-  UART_Init(&inputHandler);
-  PushButton_Init(&buttonHandler);
-
-  Timer_Defer(500, &timerHandler);
+  Timer_Defer(500, EVT_TIMER1);
 
   while(1) {
-    EventBus_Tick(&eventBus);
+    EventBus_Tick(&eventBus, &HandleEvent, NULL);
   }
 }

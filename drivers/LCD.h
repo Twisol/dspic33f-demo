@@ -27,8 +27,9 @@ typedef enum lcd_shift_display_t {
   LCD_SHIFT_DISPLAY_OFF = 0x00,
 } lcd_shift_display_t;
 
-void LCD_Init();
-void LCD_Display_Config(lcd_display_mode_t mode);
+void LCD_Init(lcd_display_mode_t mode, lcd_cursor_direction_t cursor_direction, lcd_shift_display_t shift_display);
+void LCD_Function_Set();
+void LCD_Display_Mode(lcd_display_mode_t mode);
 void LCD_Display_Clear();
 void LCD_Draw_Mode(lcd_cursor_direction_t cursor_direction, lcd_shift_display_t shift_display);
 void LCD_PutChar(char const ch);

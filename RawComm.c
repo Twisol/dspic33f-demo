@@ -2,23 +2,26 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stddef.h>
 
 #include <xc.h>            /* Register access */
 #include <libpic30.h>      /* __delay32 and friends */
 
 #include "EventBus.h"
 #include "EventTypes.h"
+#include "Timer.h"
 
 #include "drivers/PushButtons.h"
 #include "drivers/LCD.h"
 #include "drivers/LED.h"
-#include "drivers/Timer.h"
 #include "drivers/UART.h"
 
 #define DEFAULT_PRIORITY 3
+#define BAUD_RATE 9600
 
 
-static EventBus* g_eventBus = 0;
+static EventBus* g_eventBus = NULL;
+static UartBuffer* g_uart = NULL;
 
 
 void RawComm_LCD_Init() {
@@ -49,10 +52,6 @@ void RawComm_LED_Toggle(uint8_t bitvector) {
 }
 
 
-void RawComm_PushButton_EventHandler(Event ev) {
-  PushButton_EventHandler(ev.uint8);
-}
-
 void RawComm_PushButton_Init() {
   // Enable push buttons
   // Note that button 3 conflicts with LED 8, so we don't enable it.
@@ -65,9 +64,6 @@ void RawComm_PushButton_Init() {
   IFS1bits.CNIF = 0b0;
   IPC4bits.CNIP = DEFAULT_PRIORITY;
   IEC1bits.CNIE = 0b1;
-
-  // Associate hook with PushButton events
-  EventBus_SetHook(g_eventBus, EVT_BUTTON, &RawComm_PushButton_EventHandler);
 }
 
 void __attribute__((interrupt,no_auto_psv)) _CNInterrupt() {
@@ -75,16 +71,9 @@ void __attribute__((interrupt,no_auto_psv)) _CNInterrupt() {
     return;
   IFS1bits.CNIF = 0b0;
 
-  // Push an event to the event queue
-  Event ev;
-  ev.uint16 = 0x0000;
-  EventBus_Signal(g_eventBus, EVT_BUTTON, ev);
+  EventBus_Signal(g_eventBus, EVT_BUTTON);
 }
 
-
-void RawComm_Timer_EventHandler(Event ev) {
-  Timer_EventHandler();
-}
 
 void RawComm_Timer_Init(uint32_t period_us) {
   // Set timing mode
@@ -102,8 +91,6 @@ void RawComm_Timer_Init(uint32_t period_us) {
 
   // Enable timer
   T2CONbits.TON = 0b1;
-
-  EventBus_SetHook(g_eventBus, EVT_TIMER, RawComm_Timer_EventHandler);
 }
 
 void __attribute__((interrupt,no_auto_psv)) _T2Interrupt() {
@@ -112,21 +99,14 @@ void __attribute__((interrupt,no_auto_psv)) _T2Interrupt() {
   }
   IFS0bits.T2IF = 0b0;
 
-  // Push an event to the event queue
-  Event ev;
-  ev.uint16 = 0x0000;
-  EventBus_Signal(g_eventBus, EVT_TIMER, ev);
+  Timer_Tick(CLOCK_PERIOD);
 }
 
-
-void RawComm_UART_EventHandler(Event ev) {
-  UART_EventHandler(ev.uint8);
-}
 
 void RawComm_UART_Init() {
   U2MODEbits.ABAUD = 0b0;
   U2MODEbits.BRGH = 0b0;
-  U2BRG = (FCY/9600)/16 - 1;
+  U2BRG = (FCY/BAUD_RATE)/16 - 1;
 
   U2MODEbits.STSEL = 0b0;
   U2MODEbits.PDSEL = 0b00;
@@ -139,12 +119,14 @@ void RawComm_UART_Init() {
   U2MODEbits.UEN = 0b10;
   U2MODEbits.UARTEN = 0b1;
   U2STAbits.UTXEN = 0b1;
-
-  EventBus_SetHook(g_eventBus, EVT_UART, RawComm_UART_EventHandler);
 }
 
 void RawComm_UART_PutChar(uint8_t ch) {
   U2TXREG = ch;
+}
+
+bool RawComm_UART_CanTransmit() {
+  return !U2STAbits.UTXBF;
 }
 
 void __attribute__((interrupt,no_auto_psv)) _U2RXInterrupt() {
@@ -153,19 +135,20 @@ void __attribute__((interrupt,no_auto_psv)) _U2RXInterrupt() {
   }
   IFS1bits.U2RXIF = 0b0;
 
-  // Push an event to the event queue
-  Event ev;
-  ev.uint8 = U2RXREG; // Read (and automatically clear) the received character
-  EventBus_Signal(g_eventBus, EVT_UART, ev);
+  if (UART_GetCount(g_uart) == 0) {
+    EventBus_Signal(g_eventBus, EVT_UART);
+  }
+  UART_Recv(g_uart, U2RXREG);
 }
 
 
-void RawComm_Init(EventBus* eventBus, uint16_t clockPeriod) {
+void RawComm_Init(EventBus* eventBus, UartBuffer* uart) {
   g_eventBus = eventBus;
+  g_uart = uart;
 
   RawComm_LED_Init();
   RawComm_LCD_Init();
   RawComm_UART_Init();
   RawComm_PushButton_Init();
-  RawComm_Timer_Init(clockPeriod);
+  RawComm_Timer_Init(CLOCK_PERIOD);
 }

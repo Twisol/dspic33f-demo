@@ -5,24 +5,28 @@
 void __attribute__((interrupt,no_auto_psv)) _OscillatorFail()
 {
         INTCON1bits.OSCFAIL = 0;
-        while(1);
+        int trap = 1;
+        while (trap);
 }
 
 void __attribute__((interrupt,no_auto_psv)) _AddressError()
 {
         INTCON1bits.ADDRERR = 0;
-        while (1);
+        int trap = 1;
+        while (trap);
 }
 void __attribute__((interrupt,no_auto_psv)) _StackError()
 {
         INTCON1bits.STKERR = 0;
-        while (1);
+        int trap = 1;
+        while (trap);
 }
 
 void __attribute__((interrupt,no_auto_psv)) _MathError()
 {
         INTCON1bits.MATHERR = 0;
-        while (1);
+        int trap = 1;
+        while (trap);
 }
 
 // Alternate address error trap function declarations
@@ -30,30 +34,35 @@ void __attribute__((interrupt,no_auto_psv)) _MathError()
 void __attribute__((interrupt,no_auto_psv)) _AltOscillatorFail()
 {
         INTCON1bits.OSCFAIL = 0;
-        while (1);
+        int trap = 1;
+        while (trap);
 }
 
 void __attribute__((interrupt,no_auto_psv)) _AltAddressError()
 {
         INTCON1bits.ADDRERR = 0;
-        while (1);
+        int trap = 1;
+        while (trap);
 }
 
 void __attribute__((interrupt,no_auto_psv)) _AltStackError()
 {
         INTCON1bits.STKERR = 0;
-        while (1);
+        int trap = 1;
+        while (trap);
 }
 
 void __attribute__((interrupt,no_auto_psv)) _AltMathError()
 {
         INTCON1bits.MATHERR = 0;
-        while (1);
+        int trap = 1;
+        while (trap);
 }
 
 // This executes when an interrupt occurs for an interrupt source with an
 // improperly defined or undefined interrupt handling routine.
 void __attribute__((interrupt,no_auto_psv)) _DefaultInterrupt() {
-        while(1);
+        int trap = 1;
+        while (trap);
 }
 

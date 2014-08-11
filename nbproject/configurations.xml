@@ -8,12 +8,13 @@
         <itemPath>drivers/LCD.h</itemPath>
         <itemPath>drivers/LED.h</itemPath>
         <itemPath>drivers/PushButtons.h</itemPath>
-        <itemPath>drivers/Timer.h</itemPath>
         <itemPath>drivers/UART.h</itemPath>
       </logicalFolder>
       <itemPath>EventBus.h</itemPath>
       <itemPath>RawComm.h</itemPath>
       <itemPath>EventTypes.h</itemPath>
+      <itemPath>Timer.h</itemPath>
+      <itemPath>CircleBuffer.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LinkerScript"
                    displayName="Linker Files"
@@ -26,7 +27,6 @@
         <itemPath>drivers/LCD.c</itemPath>
         <itemPath>drivers/LED.c</itemPath>
         <itemPath>drivers/PushButtons.c</itemPath>
-        <itemPath>drivers/Timer.c</itemPath>
         <itemPath>drivers/UART.c</itemPath>
       </logicalFolder>
       <itemPath>configuration_bits.c</itemPath>
@@ -34,6 +34,8 @@
       <itemPath>traps.c</itemPath>
       <itemPath>EventBus.c</itemPath>
       <itemPath>RawComm.c</itemPath>
+      <itemPath>Timer.c</itemPath>
+      <itemPath>CircleBuffer.c</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
@@ -240,6 +242,7 @@
         <property key="UART 1" value="true"/>
         <property key="UART 2" value="true"/>
         <property key="debugoptions.useswbreakpoints" value="false"/>
+        <property key="firmware.download.all" value="false"/>
         <property key="hwtoolclock.frcindebug" value="false"/>
         <property key="memories.aux" value="false"/>
         <property key="memories.bootflash" value="false"/>

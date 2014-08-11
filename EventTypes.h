@@ -2,10 +2,10 @@
 #define	EVENTTYPES_H
 
 typedef enum event_class_t {
-  EVT_DEBUG=0,
-  EVT_TIMER,
+  EVT_DEBUG=1,
   EVT_BUTTON,
   EVT_UART,
+  EVT_TIMER1,
 } event_class_t;
 
 #endif	/* EVENTTYPES_H */

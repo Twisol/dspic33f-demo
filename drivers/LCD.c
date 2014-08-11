@@ -28,7 +28,14 @@ typedef enum lcd_font_width_t {
 } lcd_font_width_t;
 
 
-void LCD_Init() {
+void LCD_Init(lcd_display_mode_t mode, lcd_cursor_direction_t cursor_direction, lcd_shift_display_t shift_display) {
+  LCD_Function_Set();
+  LCD_Display_Mode(mode);
+  LCD_Display_Clear();
+  LCD_Draw_Mode(cursor_direction, shift_display);
+}
+
+void LCD_Function_Set() {
   RawComm_LCD_Send(false, false, 40,
         CMD_FUNCTION_SET
       | DL_8BIT
