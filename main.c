@@ -34,67 +34,73 @@ uint8_t* uitoa(uint16_t num, uint8_t* buf, size_t len) {
 }
 
 
-static int count = -1;
-static EventBus eventBus;
-static UartBuffer uart;
-static DeferTable deferTable;
+typedef struct AppState {
+  EventBus eventBus;
+  DeferTable deferTable;
+  UartBuffer uart;
 
-void buttonHandler(UartBuffer* uart) {
+  int count;
+} AppState;
+
+
+static AppState app;
+
+void buttonHandler(AppState* self) {
   // Display the current number
   uint8_t buf[17];
-  uint8_t* res = uitoa(count, buf, 17);
+  uint8_t* res = uitoa(self->count, buf, 17);
   if (res != 0) {
-    UART_PutString(uart, res);
-    UART_PutString(uart, "\r\n");
+    UART_PutString(&self->uart, res);
+    UART_PutString(&self->uart, "\r\n");
   }
 }
 
-void timerHandler(DeferTable* deferTable) {
+void timerHandler(AppState* self) {
   // Display the current number
-  count += 1;
-  LED_Toggle(count);
+  self->count += 1;
+  LED_Toggle(self->count);
 
-  Defer_Set(deferTable, 500, EVT_TIMER1);
+  Defer_Set(&self->deferTable, 500, EVT_TIMER1);
 }
 
-void inputHandler(EventBus* bus, UartBuffer* uart) {
+void inputHandler(AppState* self) {
   uint8_t str[32];
-  if (UART_GetString(uart, str, 32)) {
-    UART_PutString(uart, str);
+  if (UART_GetString(&self->uart, str, 32)) {
+    UART_PutString(&self->uart, str);
   }
 
-  if (UART_GetCount(uart) > 0) {
-    EventBus_Signal(bus, EVT_UART);
+  if (UART_GetCount(&self->uart) > 0) {
+    EventBus_Signal(&self->eventBus, EVT_UART);
   }
 }
 
 
-bool HandleEvent(void* self, uint8_t signal) {
+bool HandleEvent(AppState* self, uint8_t signal) {
   switch (signal) {
   case EVT_TIMER1:
-    timerHandler(&deferTable);
+    timerHandler(self);
     break;
   case EVT_BUTTON:
-    buttonHandler(&uart);
+    buttonHandler(self);
     break;
   case EVT_UART:
-    inputHandler(&eventBus, &uart);
+    inputHandler(self);
     break;
   }
 }
 
 
 int main() {
-  EventBus_Init(&eventBus);
-  Defer_Init(&deferTable, CLOCK_PERIOD, &eventBus);
+  EventBus_Init(&app.eventBus);
+  Defer_Init(&app.deferTable, CLOCK_PERIOD, &app.eventBus);
 
-  RawComm_Init(&eventBus, &deferTable, &uart);
+  RawComm_Init(&app.eventBus, &app.deferTable, &app.uart);
   LCD_Init(LCD_DISPLAY_NO_CURSOR, LCD_CURSOR_RIGHT, LCD_SHIFT_DISPLAY_OFF);
-  UART_Init(&uart);
+  UART_Init(&app.uart);
 
-  Defer_Set(&deferTable, 500, EVT_TIMER1);
+  Defer_Set(&app.deferTable, 500, EVT_TIMER1);
 
   while(1) {
-    EventBus_Tick(&eventBus, &HandleEvent, NULL);
+    EventBus_Tick(&app.eventBus, (EventHandler)&HandleEvent, &app);
   }
 }
