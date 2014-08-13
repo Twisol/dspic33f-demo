@@ -11,29 +11,46 @@ void CircleBuffer_Init(CircleBuffer* self) {
   self->length = 128;
 }
 
-bool CircleBuffer_Push(CircleBuffer* self, uint8_t ch) {
-  uint8_t next_write = (self->write_offset + 1) % self->length;
-  if (next_write == self->read_offset) {
-    return false;
+uint8_t CircleBuffer_Write(CircleBuffer* self, const uint8_t* buf, uint8_t size) {
+  uint8_t idx = 0;
+  while (idx < size) {
+    if (CircleBuffer_IsFull(self)) {
+      break;
+    }
+
+    self->data[self->write_offset] = buf[idx];
+
+    self->write_offset = (self->write_offset + 1) % self->length;
+    idx += 1;
   }
 
-  self->data[self->write_offset] = ch;
-  self->write_offset = next_write;
-
-  return true;
+  return idx; // bytes written
 }
 
-bool CircleBuffer_Pop(CircleBuffer* self, uint8_t* ch) {
-  if (self->read_offset == self->write_offset) {
-    return false;
+uint8_t CircleBuffer_Read(CircleBuffer* self, uint8_t* buf, uint8_t size) {
+  uint8_t idx = 0;
+  while (idx < size) {
+    if (CircleBuffer_IsEmpty(self)) {
+      break;
+    }
+
+    buf[idx] = self->data[self->read_offset];
+
+    self->read_offset = (self->read_offset + 1) % self->length;
+    idx += 1;
   }
 
-  *ch = self->data[self->read_offset];
-  self->read_offset = (self->read_offset + 1) % self->length;
-
-  return true;
+  return idx; // bytes read
 }
 
 uint8_t CircleBuffer_Count(CircleBuffer* self) {
   return (self->write_offset + self->length - self->read_offset) % self->length;
+}
+
+bool CircleBuffer_IsEmpty(CircleBuffer* self) {
+  return (self->write_offset == self->read_offset);
+}
+
+bool CircleBuffer_IsFull(CircleBuffer* self) {
+  return ((self->write_offset + 1) % self->length == self->read_offset);
 }

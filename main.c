@@ -50,8 +50,8 @@ void buttonHandler(AppState* self) {
   uint8_t buf[17];
   uint8_t* res = uitoa(self->count, buf, 17);
   if (res != 0) {
-    UART_PutString(&self->uart, res);
-    UART_PutString(&self->uart, "\r\n");
+    UART_PutString(&self->uart, res, 17 - (res - buf));
+    UART_PutString(&self->uart, "\r\n", 2);
   }
 }
 
@@ -64,11 +64,14 @@ void timerHandler(AppState* self) {
 }
 
 void inputHandler(AppState* self) {
+  // Act as an echo server
   uint8_t str[32];
-  if (UART_GetString(&self->uart, str, 32)) {
-    UART_PutString(&self->uart, str);
-  }
+  uint8_t bytesRead = UART_GetString(&self->uart, str, 32);
 
+  UART_PutString(&self->uart, str, bytesRead);
+
+  // If there were more than 32 characters,
+  // come back later to do the rest.
   if (UART_GetCount(&self->uart) > 0) {
     EventBus_Signal(&self->eventBus, EVT_UART);
   }

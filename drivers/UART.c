@@ -16,30 +16,19 @@ void UART_PutChar(UartBuffer* self, uint8_t ch) {
   RawComm_UART_PutChar(ch);
 }
 
-void UART_PutString(UartBuffer* self, uint8_t* str) {
-  uint8_t* itr = str;
-  while (*itr != 0) {
-    UART_PutChar(self, *itr);
-    itr += 1;
+void UART_PutString(UartBuffer* self, const uint8_t* buf, uint8_t len) {
+  uint8_t idx;
+  for (idx = 0; idx < len; ++idx) {
+    UART_PutChar(self, buf[idx]);
   }
 }
 
 bool UART_GetChar(UartBuffer* self, uint8_t* ch) {
-  return CircleBuffer_Pop(&self->data, ch);
+  return CircleBuffer_Read(&self->data, ch, 1);
 }
 
-bool UART_GetString(UartBuffer* self, uint8_t* dest, uint8_t len) {
-  uint8_t idx = 0;
-  while (idx < len-1) {
-    if (!UART_GetChar(self, dest+idx)) {
-      break;
-    }
-
-    idx += 1;
-  }
-
-  dest[idx] = '\0';
-  return (idx != 0);
+uint8_t UART_GetString(UartBuffer* self, uint8_t* dest, uint8_t len) {
+  return CircleBuffer_Read(&self->data, dest, len);
 }
 
 uint8_t UART_GetCount(UartBuffer* self) {
@@ -48,5 +37,5 @@ uint8_t UART_GetCount(UartBuffer* self) {
 
 
 bool UART_Recv(UartBuffer* self, uint8_t ch) {
-  return CircleBuffer_Push(&self->data, ch);
+  return CircleBuffer_Write(&self->data, &ch, 1);
 }

@@ -13,9 +13,13 @@ typedef struct CircleBuffer {
 } CircleBuffer;
 
 void CircleBuffer_Init(CircleBuffer* self);
-bool CircleBuffer_Push(CircleBuffer* self, uint8_t ch);
-bool CircleBuffer_Pop(CircleBuffer* self, uint8_t* ch);
+
+uint8_t CircleBuffer_Write(CircleBuffer* self, const uint8_t* buf, uint8_t size);
+uint8_t CircleBuffer_Read(CircleBuffer* self, uint8_t* buf, uint8_t size);
+
 uint8_t CircleBuffer_Count(CircleBuffer* self);
+bool CircleBuffer_IsEmpty(CircleBuffer* self);
+bool CircleBuffer_IsFull(CircleBuffer* self);
 
 #endif	/* CIRCLEBUFFER_H */
 
