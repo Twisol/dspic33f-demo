@@ -11,6 +11,7 @@
 #include "EventTypes.h"
 #include "Defer.h"
 
+#include "CircleBuffer.h"
 #include "drivers/PushButtons.h"
 #include "drivers/LCD.h"
 #include "drivers/LED.h"
@@ -18,11 +19,7 @@
 
 #define DEFAULT_PRIORITY 3
 #define BAUD_RATE 9600
-
-
-static EventBus* g_eventBus = NULL;
-static UartBuffer* g_uart = NULL;
-static DeferTable* g_deferTable = NULL;
+#define CLOCK_PERIOD 1000 /* microseconds */
 
 
 void RawComm_LCD_Init() {
@@ -72,7 +69,8 @@ void __attribute__((interrupt,no_auto_psv)) _CNInterrupt() {
     return;
   IFS1bits.CNIF = 0b0;
 
-  EventBus_Signal(g_eventBus, EVT_BUTTON);
+  RawComm* self = _InterruptGetRawComm();
+  EventBus_Signal(self->buttons.bus, self->buttons.evt_CHANGE);
 }
 
 
@@ -100,7 +98,8 @@ void __attribute__((interrupt,no_auto_psv)) _T2Interrupt() {
   }
   IFS0bits.T2IF = 0b0;
 
-  Defer_Tick(g_deferTable, CLOCK_PERIOD);
+  RawComm* self = _InterruptGetRawComm();
+  Defer_Tick(&self->defer, self->defer.clockPeriod);
 }
 
 
@@ -136,21 +135,37 @@ void __attribute__((interrupt,no_auto_psv)) _U2RXInterrupt() {
   }
   IFS1bits.U2RXIF = 0b0;
 
-  if (UART_GetCount(g_uart) == 0) {
-    EventBus_Signal(g_eventBus, EVT_UART);
+  RawComm* self = _InterruptGetRawComm();
+
+  if (UART_GetCount(&self->uart) == 0) {
+    EventBus_Signal(self->uart.bus, self->uart.evt_RX);
   }
-  UART_Recv(g_uart, U2RXREG);
+
+  uint8_t ch = U2RXREG;
+  UART_Recv(&self->uart, ch);
 }
 
 
-void RawComm_Init(EventBus* eventBus, DeferTable* deferTable, UartBuffer* uart) {
-  g_eventBus = eventBus;
-  g_uart = uart;
-  g_deferTable = deferTable;
+void RawComm_EventHandler(RawComm* self, uint8_t signal) {
+  switch (signal) {
+  default:
+    // Unknown signal
+    break;
+  }
+}
 
+void RawComm_ProcessEvents(RawComm* self) {
+  EventBus_Tick(&self->bus, (EventHandler)&RawComm_EventHandler, self);
+}
+
+void RawComm_Init(RawComm* self, EventBus* master, Event masterEvent) {
+  EventBus_Init(&self->bus, master, masterEvent);
+}
+
+void RawComm_Enable(RawComm* self) {
   RawComm_LED_Init();
   RawComm_LCD_Init();
   RawComm_UART_Init();
   RawComm_PushButton_Init();
-  RawComm_Timer_Init(CLOCK_PERIOD);
+  RawComm_Timer_Init(self->defer.clockPeriod);
 }

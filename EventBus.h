@@ -4,12 +4,19 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+typedef uint8_t Event;
+
+struct EventBus;
 typedef struct EventBus {
+  struct EventBus* master;
+  Event masterEvent;
+  uint16_t tableSize;
+
   volatile bool signalTable[32];
 } EventBus;
 
-typedef bool (*EventHandler)(void* context, uint8_t signal);
-void EventBus_Signal(EventBus* self, uint8_t signal);
+typedef bool (*EventHandler)(void* context, Event ev);
+void EventBus_Signal(EventBus* self, Event ev);
 void EventBus_Tick(EventBus* self, EventHandler handler, void* context);
 
 #endif	/* EVENTQUEUE_H */

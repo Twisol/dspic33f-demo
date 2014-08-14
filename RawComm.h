@@ -5,11 +5,24 @@
 
 #include "EventBus.h"
 #include "Defer.h"
+#include "CircleBuffer.h"
 #include "drivers/UART.h"
+#include "drivers/PushButtons.h"
 
-void RawComm_Init(EventBus* eventBus, DeferTable* defer, UartBuffer* uart);
+typedef struct RawComm {
+  EventBus bus;
 
-#define CLOCK_PERIOD 1000 /* microseconds */
+  DeferTable defer;
+  UartBuffer uart;
+  ButtonInterface buttons;
+} RawComm;
+
+void RawComm_Init(RawComm* self, EventBus* master, Event masterEvent);
+void RawComm_Enable(RawComm* self);
+void RawComm_ProcessEvents(RawComm* dev);
+
+// Required to be implemented by the user
+RawComm* _InterruptGetRawComm();
 
 #endif	/* RAWCOMM_H */
 

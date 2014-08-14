@@ -5,17 +5,23 @@
 
 #include "EventBus.h"
 
+typedef struct DeferEntry {
+  uint16_t countdown;
+  EventBus* target;
+  Event ev;
+} DeferEntry;
+
 typedef struct DeferTable {
-  EventBus* bus;
-  uint8_t size;
   uint16_t clockPeriod;
-  volatile uint16_t diffUnderflow;
-  volatile uint16_t countdowns[32];
+  uint16_t diffUnderflow;
+  uint8_t size;
+
+  volatile DeferEntry entries[32];
 } DeferTable;
 
 
-void Defer_Init(DeferTable* self, uint16_t clockPeriod, EventBus* eventBus);
-bool Defer_Set(DeferTable* self, uint16_t ticks, uint8_t signal);
+void Defer_Init(DeferTable* self, uint16_t clockPeriod);
+bool Defer_Set(DeferTable* self, uint16_t ticks, EventBus* target, Event ev, uint8_t* id);
 void Defer_Tick(DeferTable* self, uint16_t timediff);
 
 #endif  /* DEFER_H */
