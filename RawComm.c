@@ -16,6 +16,7 @@
 #include "drivers/LCD.h"
 #include "drivers/LED.h"
 #include "drivers/UART.h"
+#include "drivers/SD.h"
 
 #define DEFAULT_PRIORITY 3
 #define BAUD_RATE 9600
@@ -146,6 +147,78 @@ void __attribute__((interrupt,no_auto_psv)) _U2RXInterrupt() {
 }
 
 
+void RawComm_SD_Init() {
+  TRISBbits.TRISB1 = 0; // Card Select pin enabled
+
+  SPI1CON1bits.MSTEN = 1;
+  SPI1CON1bits.SPRE = 0b010; //  6:1
+  SPI1CON1bits.PPRE = 0b00;  // 64:1
+
+  SPI1STATbits.SPIEN = 1;
+
+  IFS0bits.SPI1IF = 0b0;
+  IPC2bits.SPI1IP = DEFAULT_PRIORITY;
+  IEC0bits.SPI1IE = 0b1;
+}
+
+void RawComm_SD_ClearOverflow(SdInterface* sd) {
+  // Flush the input register
+  while (!SPI1STATbits.SPITBF) {
+    volatile uint8_t ch = SPI1BUF;
+  }
+
+  // Flush the input buffer
+  CircleBuffer_Clear(&sd->rx);
+
+  // Clear the overflow flags
+  sd->overflow = false;
+  IEC0bits.SPI1EIE = 0;
+  SPI1STATbits.SPIROV = 0;
+}
+
+void RawComm_SD_FlushTX(SdInterface* sd) {
+  uint8_t ch;
+  while (!SPI1STATbits.SPITBF) {
+    if (!CircleBuffer_Read(&sd->tx, &ch, 1)) {
+      break;
+    }
+
+    SPI1BUF = ch;
+  }
+}
+
+void RawComm_SD_FlushRX(SdInterface* sd) {
+  if (SPI1STATbits.SPIROV && !sd->overflow) {
+    sd->overflow = true;
+    EventBus_Signal(sd->bus, EVT_SD_OVERFLOW);
+    return;
+  }
+
+  uint8_t ch;
+  while (!SPI1STATbits.SPITBF) {
+    if (CircleBuffer_IsFull(&sd->rx)) {
+      // overflow will trigger next time RX occurs
+      break;
+    }
+
+    ch = SPI1BUF;
+    CircleBuffer_Write(&sd->rx, &ch, 1);
+    EventBus_Signal(sd->bus, EVT_SD);
+  }
+}
+
+void __attribute__((interrupt,no_auto_psv)) _SPI1Interrupt() {
+  if (IFS0bits.SPI1IF == 0b0) {
+    return;
+  }
+  IFS0bits.SPI1IF = 0b0;
+
+  RawComm* self = _InterruptGetRawComm();
+  RawComm_SD_FlushRX(&self->sd);
+  RawComm_SD_FlushTX(&self->sd);
+}
+
+
 void RawComm_EventHandler(RawComm* self, uint8_t signal) {
   switch (signal) {
   default:
@@ -166,6 +239,7 @@ void RawComm_Enable(RawComm* self) {
   RawComm_LED_Init();
   RawComm_LCD_Init();
   RawComm_UART_Init();
+  RawComm_SD_Init();
   RawComm_PushButton_Init();
   RawComm_Timer_Init(self->defer.clockPeriod);
 }

@@ -8,12 +8,14 @@
 #include "CircleBuffer.h"
 #include "drivers/UART.h"
 #include "drivers/PushButtons.h"
+#include "drivers/SD.h"
 
 typedef struct RawComm {
   EventBus bus;
 
   DeferTable defer;
   UartBuffer uart;
+  SdInterface sd;
   ButtonInterface buttons;
 } RawComm;
 

@@ -9,6 +9,7 @@
         <itemPath>drivers/LED.h</itemPath>
         <itemPath>drivers/PushButtons.h</itemPath>
         <itemPath>drivers/UART.h</itemPath>
+        <itemPath>drivers/SD.h</itemPath>
       </logicalFolder>
       <itemPath>EventBus.h</itemPath>
       <itemPath>RawComm.h</itemPath>
@@ -28,6 +29,7 @@
         <itemPath>drivers/LED.c</itemPath>
         <itemPath>drivers/PushButtons.c</itemPath>
         <itemPath>drivers/UART.c</itemPath>
+        <itemPath>drivers/SD.c</itemPath>
       </logicalFolder>
       <itemPath>configuration_bits.c</itemPath>
       <itemPath>main.c</itemPath>

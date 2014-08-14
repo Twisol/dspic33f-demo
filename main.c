@@ -84,7 +84,6 @@ void inputHandler(AppState* self) {
   }
 }
 
-
 bool MainState(AppState* self, Event ev) {
   switch (ev) {
   case EVT_TIMER1:
@@ -105,6 +104,12 @@ bool MainState(AppState* self, Event ev) {
 
 int main() {
   EventBus_Init(&app.eventBus, NULL, 0);
+
+  // Initialize SD state
+  SD_Init(&app.dev.sd);
+  app.dev.sd.bus = &app.eventBus;
+  app.dev.sd.evt_RX = EVT_SD;
+  app.dev.sd.evt_RX_OVERFLOW = EVT_SD_OVERFLOW;
 
   // Initialize timer state
   Defer_Init(&app.dev.defer, 1000/*us*/);
