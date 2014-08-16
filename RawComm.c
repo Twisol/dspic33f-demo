@@ -8,10 +8,9 @@
 #include <libpic30.h>      /* __delay32 and friends */
 
 #include "EventBus.h"
-#include "EventTypes.h"
+#include "CircleBuffer.h"
 #include "Defer.h"
 
-#include "CircleBuffer.h"
 #include "drivers/PushButtons.h"
 #include "drivers/LCD.h"
 #include "drivers/LED.h"
@@ -21,6 +20,13 @@
 #define DEFAULT_PRIORITY 3
 #define BAUD_RATE 9600
 #define CLOCK_PERIOD 1000 /* microseconds */
+
+
+typedef enum dev_event_class_t {
+  EVT_SD_RESET = 0,
+  EVT_SD_CMD0,
+  EVT_SD_CMD8,
+} dev_event_class_t;
 
 
 void RawComm_LCD_Init() {
@@ -147,80 +153,197 @@ void __attribute__((interrupt,no_auto_psv)) _U2RXInterrupt() {
 }
 
 
-void RawComm_SD_Init() {
-  TRISBbits.TRISB1 = 0; // Card Select pin enabled
+// # SD Card Driver
+//
+// ## References
+// - *SD Specification*: https://www.sdcard.org/downloads/pls/simplified_specs/part1_410.pdf
+// - *SPI Module*: http://ww1.microchip.com/downloads/en/DeviceDoc/70005185a.pdf
 
-  SPI1CON1bits.MSTEN = 1;
-  SPI1CON1bits.SPRE = 0b010; //  6:1
-  SPI1CON1bits.PPRE = 0b00;  // 64:1
+void RawComm_SD_Init(RawComm* self) {
+  TRISGbits.TRISG6 = 0; // SPI Clock Out
+  TRISGbits.TRISG7 = 1; // SPI Data In
+  TRISGbits.TRISG8 = 0; // SPI Data Out
+  TRISGbits.TRISG0 = 1; // Card Insertion Detect pin
+  TRISGbits.TRISG1 = 1; // Write-Protect Detect pin
+  TRISBbits.TRISB9 = 0; // Card Select pin
 
-  SPI1STATbits.SPIEN = 1;
+  SPI2CON1bits.MSTEN = 1;
+  SPI2CON1bits.CKE = 1;
+  SPI2CON1bits.CKP = 0;
+  SPI2CON1bits.SPRE = 0b010; //  6:1
+  SPI2CON1bits.PPRE = 0b00;  // 64:1
 
-  IFS0bits.SPI1IF = 0b0;
-  IPC2bits.SPI1IP = DEFAULT_PRIORITY;
-  IEC0bits.SPI1IE = 0b1;
+  SPI2STATbits.SPIEN = 1;
+  SPI2STATbits.SPIROV = 0;
+
+  IFS2bits.SPI2IF = 0b0;
+  IPC8bits.SPI2IP = DEFAULT_PRIORITY;
+  IEC2bits.SPI2IE = 0b1;
+
+  EventBus_Signal(&self->bus, EVT_SD_RESET);
 }
 
-void RawComm_SD_ClearOverflow(SdInterface* sd) {
-  // Flush the input register
-  while (!SPI1STATbits.SPITBF) {
-    volatile uint8_t ch = SPI1BUF;
-  }
-
-  // Flush the input buffer
-  CircleBuffer_Clear(&sd->rx);
-
-  // Clear the overflow flags
-  sd->overflow = false;
-  IEC0bits.SPI1EIE = 0;
-  SPI1STATbits.SPIROV = 0;
-}
-
-void RawComm_SD_FlushTX(SdInterface* sd) {
-  uint8_t ch;
-  while (!SPI1STATbits.SPITBF) {
-    if (!CircleBuffer_Read(&sd->tx, &ch, 1)) {
-      break;
-    }
-
-    SPI1BUF = ch;
-  }
-}
-
-void RawComm_SD_FlushRX(SdInterface* sd) {
-  if (SPI1STATbits.SPIROV && !sd->overflow) {
-    sd->overflow = true;
-    EventBus_Signal(sd->bus, EVT_SD_OVERFLOW);
+void __attribute__((interrupt,no_auto_psv)) _SPI2Interrupt() {
+  if (IFS2bits.SPI2IF == 0b0) {
     return;
   }
-
-  uint8_t ch;
-  while (!SPI1STATbits.SPITBF) {
-    if (CircleBuffer_IsFull(&sd->rx)) {
-      // overflow will trigger next time RX occurs
-      break;
-    }
-
-    ch = SPI1BUF;
-    CircleBuffer_Write(&sd->rx, &ch, 1);
-    EventBus_Signal(sd->bus, EVT_SD);
-  }
-}
-
-void __attribute__((interrupt,no_auto_psv)) _SPI1Interrupt() {
-  if (IFS0bits.SPI1IF == 0b0) {
-    return;
-  }
-  IFS0bits.SPI1IF = 0b0;
+  IFS2bits.SPI2IF = 0b0;
 
   RawComm* self = _InterruptGetRawComm();
-  RawComm_SD_FlushRX(&self->sd);
-  RawComm_SD_FlushTX(&self->sd);
+  SdInterface* sd = &self->sd;
+
+  uint8_t response = SPI2BUF;
+
+  switch (sd->state) {
+  case SDS_IDLE:
+    if (response != 0xFF) {
+    // busy?
+      SPI2BUF = 0xFF;
+      break;
+    } else if (sd->txBytesLeft == 0) {
+      // We're waiting for more input, so signal that SPI2BUF may be pushed
+      // from the main thread to resume.
+      sd->idle = true;
+      LATBbits.LATB9 = 1; // Chip Select (Off)
+      break;
+    } else {
+      sd->state = SDS_TRANSMIT;
+      /* !!CASE FALL-THROUGH!! */
+    }
+
+  /* !!CASE FALL-THROUGH!! */
+  case SDS_TRANSMIT:
+    if (sd->txBytesLeft == 0) {
+      sd->timeoutTicks = 8; // Number of 0xFF replies before timing out
+      sd->state = SDS_AWAIT;
+      SPI2BUF = 0xFF;
+    } else {
+      uint8_t query;
+      if (CircleBuffer_Read(&sd->tx, &query, 1)) {
+        LATBbits.LATB9 = 0; // Chip Select (On)
+        sd->txBytesLeft -= 1;
+        sd->state = SDS_TRANSMIT;
+        SPI2BUF = query;
+      } else {
+        sd->idle = true;
+        LATBbits.LATB9 = 1; // Chip Select (Off)
+      }
+    }
+    break;
+
+  case SDS_AWAIT:
+    if (response == 0xFF && sd->timeoutTicks > 0) {
+    // awaiting response
+      sd->timeoutTicks -= 1;
+      SPI2BUF = 0xFF;
+      break;
+    }
+
+    // response received or timed out
+    sd->state = SDS_RECEIVE;
+    /* !!CASE FALL-THROUGH!! */
+
+  /* !!CASE FALL-THROUGH!! */
+  case SDS_RECEIVE:
+    if (sd->rxBytesLeft == 0 || sd->timeoutTicks == 0) {
+      uint8_t silence = 0xFF;
+      while (sd->rxBytesLeft > 0) {
+        CircleBuffer_Write(&sd->rx, &silence, 1);
+        sd->rxBytesLeft -= 1;
+      }
+
+      sd->state = SDS_IDLE;
+      EventBus_Signal(sd->target, sd->responseEvent);
+    } else {
+      if (CircleBuffer_Write(&sd->rx, &response, 1)) {
+        sd->rxBytesLeft -= 1;
+      } else {
+        sd->overflow = true;
+        sd->state = SDS_IDLE;
+        EventBus_Signal(&self->bus, EVT_SD_RESET);
+      }
+    }
+
+    SPI2BUF = 0xFF;
+    break;
+
+  default:
+    EventBus_Signal(&self->bus, EVT_SD_RESET);
+    break;
+  }
 }
 
+bool RawComm_SD_Poke(SdInterface* sd, uint8_t data) {
+  SPI2BUF = data;
+}
+
+bool RawComm_SD_CardDetected(SdInterface* sd) {
+  return !PORTGbits.RG0;
+}
+
+bool RawComm_SD_WriteProtected(SdInterface* sd) {
+  return !PORTGbits.RG1;
+}
 
 void RawComm_EventHandler(RawComm* self, uint8_t signal) {
   switch (signal) {
+  case EVT_SD_RESET: {
+    SdCommand cmd = {SDC_CMD, 0, 0x00, 0x00, 0x00, 0x00};
+    SD_SendCommand(&self->sd, cmd, &self->bus, EVT_SD_CMD0);
+    break;
+  }
+
+  case EVT_SD_CMD0: {
+    uint8_t response;
+    CircleBuffer_Read(&self->sd.rx, &response, 1);
+
+    if (response != 0x01) {
+      SdCommand cmd = {SDC_CMD, 0, 0x00, 0x00, 0x00, 0x00};
+      SD_SendCommand(&self->sd, cmd, &self->bus, EVT_SD_CMD0);
+    } else {
+      SdCommand cmd = {SDC_CMD, 8, 0x00, 0x00, 0x01, 0xAA};
+      SD_SendCommand(&self->sd, cmd, &self->bus, EVT_SD_CMD8);
+    }
+
+    break;
+  }
+
+  case EVT_SD_CMD8: {
+    uint8_t response[5];
+    CircleBuffer_Read(&self->sd.rx, response, 5);
+
+    if (response[0] == 0xFF) {
+    // No response - retry
+      UART_PutString(&self->uart, "Response?\r\n", 11);
+    }
+
+    if (response[0] & 0x04) {
+    // Illegal command - legacy card
+      UART_PutString(&self->uart, "Legacy?\r\n", 9);
+      break;
+    }
+
+    if ((response[3] & 0x0F) == 0) {
+    // Card does not support voltage level - don't retry
+      UART_PutString(&self->uart, "Voltage?\r\n", 10);
+      break;
+    }
+
+    if (response[4] != 0xAA) {
+    // Check-pattern does not match
+      UART_PutString(&self->uart, "Pattern?\r\n", 10);
+      break;
+    }
+
+    // Modern card
+    UART_PutString(&self->uart, "Modern!\r\n", 9);
+
+    self->sd.overflow = false;
+    self->sd.idle = true;
+    EventBus_Signal(self->sd.bus, self->sd.evt_READY);
+    break;
+  }
+
   default:
     // Unknown signal
     break;
@@ -239,7 +362,7 @@ void RawComm_Enable(RawComm* self) {
   RawComm_LED_Init();
   RawComm_LCD_Init();
   RawComm_UART_Init();
-  RawComm_SD_Init();
+  RawComm_SD_Init(self);
   RawComm_PushButton_Init();
   RawComm_Timer_Init(self->defer.clockPeriod);
 }
