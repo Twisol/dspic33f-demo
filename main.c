@@ -126,8 +126,8 @@ bool MainState(AppState* self, Event ev) {
     break;
 
   // RawComm-level events
-  case EVT_RAWCOMM:
-    RawComm_ProcessEvents(&self->dev);
+  case EVTBUS_SD:
+    SD_ProcessEvents(&self->dev.sd);
     break;
 
   case EVT_IGNORE:
@@ -141,8 +141,8 @@ int main() {
   EventBus_Init(&app.eventBus, NULL, 0);
 
   // Initialize SD state
-  SD_Init(&app.dev.sd);
-  app.dev.sd.bus = &app.eventBus;
+  SD_Init(&app.dev.sd, &app.eventBus, EVTBUS_SD);
+  app.dev.sd.clientBus = &app.eventBus;
   app.dev.sd.evt_READY = EVT_SD_READY;
   app.dev.sd.evt_RX_OVERFLOW = EVT_SD_OVERFLOW;
 
@@ -161,10 +161,9 @@ int main() {
   app.dev.uart.evt_RX = EVT_UART;
   UART_Init(&app.dev.uart);
 
-  // Initialize hardware access layer and enable peripherals
-  RawComm_Init(&app.dev, &app.eventBus, EVT_RAWCOMM);
-  RawComm_Enable(&app.dev);
-
+  // Begin peripheral communications
+  RawComm_Init(&app.dev);
+  SD_Reset(&app.dev.sd);
   Defer_Set(&app.dev.defer, 500, &app.eventBus, EVT_TIMER1, NULL);
 
   while(1) {

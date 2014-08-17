@@ -37,6 +37,10 @@ uint16_t UART_GetCount(UartBuffer* self) {
 }
 
 
-bool UART_Recv(UartBuffer* self, uint8_t ch) {
+bool UART_RecvRaw(UartBuffer* self, uint8_t ch) {
+  if (UART_GetCount(self) == 0) {
+    EventBus_Signal(self->bus, self->evt_RX);
+  }
+
   return CircleBuffer_Write(&self->rx, &ch, 1);
 }

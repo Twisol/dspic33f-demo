@@ -26,7 +26,7 @@ void UART_PutString(UartBuffer* self, const uint8_t* buf, uint16_t len);
 bool UART_GetChar(UartBuffer* self, uint8_t* ch);
 uint16_t UART_GetString(UartBuffer* self, uint8_t* dest, uint16_t len);
 
-bool UART_Recv(UartBuffer* self, uint8_t ch);
+bool UART_RecvRaw(UartBuffer* self, uint8_t ch);
 uint16_t UART_Count(UartBuffer* self);
 
 #endif	/* UART_H */

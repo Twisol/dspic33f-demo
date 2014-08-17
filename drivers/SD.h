@@ -39,30 +39,37 @@ typedef struct SdCommand {
 
 typedef struct SdInterface {
 // public:
-  EventBus* bus;
+  EventBus* clientBus;
   Event evt_READY;
   Event evt_RX_OVERFLOW;
 
 // private:
+  // Driver state and orchestration
+  EventBus bus;
   CircleBuffer tx;
   CircleBuffer rx;
   sd_state_t state;
   bool idle;
   bool overflow;
 
+  // Temporary data for use during transmission
   uint8_t rxBytesLeft;
   uint8_t txBytesLeft;
   uint8_t timeoutTicks;
-  EventBus* target;
+  EventBus* responseBus;
   Event responseEvent;
 } SdInterface;
 
 // Exported API
-bool SD_Init(SdInterface* sd);
+bool SD_Init(SdInterface* sd, EventBus* master, Event masterEvent);
+bool SD_Reset(SdInterface* sd);
 bool SD_SendCommand(SdInterface* sd, SdCommand cmd, EventBus* bus, Event evt);
+void SD_ProcessEvents(SdInterface* sd);
+void SD_RecvRaw(SdInterface* sd, uint8_t data);
 
 // Imported API
-bool RawComm_SD_Poke(SdInterface* sd, uint8_t data);
+uint8_t RawComm_SD_Peek(SdInterface* sd);
+void RawComm_SD_Poke(SdInterface* sd, uint8_t data);
 bool RawComm_SD_CardDetected(SdInterface* sd);
 bool RawComm_SD_WriteProtected(SdInterface* sd);
 

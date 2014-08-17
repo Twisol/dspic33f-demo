@@ -4,7 +4,7 @@
 typedef enum event_class_t {
   EVT_IGNORE=0,
   EVT_DEBUG,
-  EVT_RAWCOMM,
+  EVTBUS_SD,
 
   EVT_BUTTON,
   EVT_UART,

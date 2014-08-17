@@ -11,17 +11,13 @@
 #include "drivers/SD.h"
 
 typedef struct RawComm {
-  EventBus bus;
-
   DeferTable defer;
   UartBuffer uart;
   SdInterface sd;
   ButtonInterface buttons;
 } RawComm;
 
-void RawComm_Init(RawComm* self, EventBus* master, Event masterEvent);
-void RawComm_Enable(RawComm* self);
-void RawComm_ProcessEvents(RawComm* dev);
+void RawComm_Init(RawComm* self);
 
 // Required to be implemented by the user
 RawComm* _InterruptGetRawComm();
