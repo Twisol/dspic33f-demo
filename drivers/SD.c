@@ -3,11 +3,10 @@
 #include "../CircleBuffer.h"
 #include "../RawComm.h"  // Debugging
 
-typedef enum sd_event_t {
-  EVT_SD_RESET = 0,
-  EVT_SD_CMD0,
-  EVT_SD_CMD8,
-} sd_event_t;
+struct SdCommand SdCommand(uint8_t index, uint8_t arg3, uint8_t arg2, uint8_t arg1, uint8_t arg0) {
+  struct SdCommand cmd = {index, arg3, arg2, arg1, arg0};
+  return cmd;
+}
 
 
 #define R1 SDR_R1
@@ -47,23 +46,7 @@ uint8_t responseLength(sd_response_t type) {
   }
 }
 
-
-// SD Specification: https://www.sdcard.org/downloads/pls/simplified_specs/part1_410.pdf
-bool SD_Init(SdInterface* self, EventBus* master, Event masterEvent) {
-  EventBus_Init(&self->bus, master, masterEvent);
-
-  CircleBuffer_Init(&self->rx);
-  CircleBuffer_Init(&self->tx);
-  self->idle = true;
-  self->state = SDS_IDLE;
-}
-
-bool SD_Reset(SdInterface* sd) {
-  SdCommand cmd = {SDC_CMD, 0, 0x00, 0x00, 0x00, 0x00};
-  return SD_SendCommand(sd, cmd, &sd->bus, EVT_SD_CMD0);
-}
-
-uint8_t SD_GenCRC(SdCommand cmd) {
+uint8_t genCRC(struct SdCommand cmd) {
   switch (cmd.index) {
   case 0:
     return 0x4A;
@@ -74,27 +57,40 @@ uint8_t SD_GenCRC(SdCommand cmd) {
   }
 }
 
-bool SD_SendCommand(SdInterface* self, SdCommand cmd, EventBus* bus, Event evt) {
-  if (self->state != SDS_IDLE) {
-    return false;
-  }
 
+// SD Specification: https://www.sdcard.org/downloads/pls/simplified_specs/part1_410.pdf
+bool SD_Init(SdInterface* self) {
+  CircleBuffer_Init(&self->buffer);
+  self->state = SDS_AWAIT_TRANSMIT;
+  self->flow_type = SDF_IDLE;
+}
+
+void SD_TransmitCmd(SdInterface* self, struct SdCommand cmd, uint8_t recvLength) {
   uint8_t mem[] = {
     (cmd.index | 0x40) &~ 0x80,
     cmd.arg3, cmd.arg2, cmd.arg1, cmd.arg0,
-    (SD_GenCRC(cmd) << 1) | 0x01
+    (genCRC(cmd) << 1) | 0x01
   };
 
-  CircleBuffer_Write(&self->tx, mem, 6);
-  self->responseBus = bus;
-  self->responseEvent = evt;
+  CircleBuffer_Write(&self->buffer, mem, 6);
   self->txBytesLeft = 6;
-  self->rxBytesLeft = responseLength(cmdToResponseType[cmd.index]);
+  self->rxBytesLeft = recvLength;
 
-  if (self->idle) {
-    self->idle = false;
-    RawComm_SD_Poke(self, 0xFF);
+  RawComm_SD_CardSelect(self, true);
+  RawComm_SD_Poke(self, 0xFF);
+}
+
+bool SD_GetSector(SdInterface* self, uint16_t sector, uint8_t buf[512], EventBus* bus, Event evt) {
+  if (self->flow_type != SDF_IDLE) {
+    return false;
   }
+
+  uint16_t i;
+  for (i = 0; i < 512; ++i) {
+    buf[i] = 'a' + (i % 26);
+  }
+
+  EventBus_Signal(bus, evt);
   return true;
 }
 
@@ -107,32 +103,37 @@ bool SD_WriteProtected(SdInterface* sd) {
 }
 
 
-void SD_EventHandler(SdInterface* sd, uint8_t signal) {
+void SD_ResetFlow(SdInterface* sd) {
   RawComm* dev = _InterruptGetRawComm();
 
-  switch (signal) {
-  case EVT_SD_RESET:
-    SD_Reset(sd);
+  uint8_t* state = &sd->reset_flow.state;
+
+  switch (sd->reset_flow.state) {
+  case 0:
+    RawComm_SD_CardSelect(sd, true);
+
+    SD_TransmitCmd(sd, SdCommand(0, 0x00, 0x00, 0x00, 0x00), 1);
+    *state = 1;
     break;
 
-  case EVT_SD_CMD0: {
+  case 1: {
     uint8_t response;
-    CircleBuffer_Read(&sd->rx, &response, 1);
+    CircleBuffer_Read(&sd->buffer, &response, 1);
 
     if (response != 0x01) {
-      SdCommand cmd = {SDC_CMD, 0, 0x00, 0x00, 0x00, 0x00};
-      SD_SendCommand(sd, cmd, &sd->bus, EVT_SD_CMD0);
+      SD_TransmitCmd(sd, SdCommand(0, 0x00, 0x00, 0x00, 0x00), 1);
+      *state = 1;
     } else {
-      SdCommand cmd = {SDC_CMD, 8, 0x00, 0x00, 0x01, 0xAA};
-      SD_SendCommand(sd, cmd, &sd->bus, EVT_SD_CMD8);
+      SD_TransmitCmd(sd, SdCommand(8, 0x00, 0x00, 0x01, 0xAA), 5);
+      *state = 3;
     }
-
     break;
   }
 
-  case EVT_SD_CMD8: {
+  case 2: {
     uint8_t response[5];
-    CircleBuffer_Read(&sd->rx, response, 5);
+    CircleBuffer_Read(&sd->buffer, response, 5);
+    RawComm_SD_CardSelect(sd, false);
 
     if (response[0] == 0xFF) {
     // No response - retry
@@ -159,10 +160,11 @@ void SD_EventHandler(SdInterface* sd, uint8_t signal) {
 
     // Modern card
     UART_PutString(&dev->uart, "Modern!\r\n", 9);
+    EventBus_Signal(sd->responseBus, sd->responseEvent);
 
-    sd->overflow = false;
-    sd->idle = true;
-    EventBus_Signal(sd->clientBus, sd->evt_READY);
+    sd->flow_type = SDF_IDLE;
+    sd->idle_flow = 0;
+    *state = 0;
     break;
   }
 
@@ -171,87 +173,101 @@ void SD_EventHandler(SdInterface* sd, uint8_t signal) {
   }
 }
 
-void SD_ProcessEvents(SdInterface* sd) {
-  EventBus_Tick(&sd->bus, (EventHandler)&SD_EventHandler, sd);
+void SD_DoNext(SdInterface* sd) {
+  switch (sd->flow_type) {
+  case SDF_RESET:
+    SD_ResetFlow(sd);
+    break;
+
+  case SDF_IDLE:
+  default:
+    break;
+  }
+}
+
+bool SD_Reset(SdInterface* sd, EventBus* bus, Event evt) {
+  if (sd->flow_type != SDF_IDLE) {
+    return false;
+  }
+
+  sd->flow_type = SDF_RESET;
+  sd->reset_flow.state = 0;
+
+  sd->responseBus = bus;
+  sd->responseEvent = evt;
+  SD_ResetFlow(sd);
 }
 
 
 void SD_RecvRaw(SdInterface* sd, uint8_t data) {
   switch (sd->state) {
-  case SDS_IDLE:
-    if (data != 0xFF) {
-    // busy?
+  case SDS_AWAIT_TRANSMIT:
+    if (data != 0xFF && sd->txBytesLeft != 0 && sd->timeoutTicks != 0) {
+    // awaiting go-ahead
+      sd->timeoutTicks -= 1;
       RawComm_SD_Poke(sd, 0xFF);
       break;
-    } else if (sd->txBytesLeft == 0) {
-      // We're waiting for more input, so signal that SPI2BUF may be pushed
-      // from the main thread to resume.
-      sd->idle = true;
-      RawComm_SD_CardSelect(sd, false);
-      break;
     } else {
+    // ready to send
       sd->state = SDS_TRANSMIT;
-      /* !!CASE FALL-THROUGH!! */
+      /* !!CASE FALLTHROUGH!! */
     }
 
-  /* !!CASE FALL-THROUGH!! */
-  case SDS_TRANSMIT:
-    if (sd->txBytesLeft == 0) {
-      sd->timeoutTicks = 8; // Number of 0xFF replies before timing out
-      sd->state = SDS_AWAIT;
-      RawComm_SD_Poke(sd, 0xFF);
+  /* !!CASE FALLTHROUGH!! */
+  case SDS_TRANSMIT: {
+    uint8_t query;
+
+    if (sd->txBytesLeft != 0 && sd->timeoutTicks != 0) {
+      CircleBuffer_Read(&sd->buffer, &query, 1);
+
+      sd->txBytesLeft -= 1;
+      RawComm_SD_Poke(sd, query);
+      break;
     } else {
-      uint8_t query;
-      if (CircleBuffer_Read(&sd->tx, &query, 1)) {
+      uint8_t silence = 0xFF;
+      while (sd->txBytesLeft > 0) {
+        CircleBuffer_Read(&sd->buffer, &silence, 1);
         sd->txBytesLeft -= 1;
-        sd->state = SDS_TRANSMIT;
-        RawComm_SD_CardSelect(sd, true);
-        RawComm_SD_Poke(sd, query);
-      } else {
-        sd->idle = true;
-        RawComm_SD_CardSelect(sd, false);
       }
-    }
-    break;
 
-  case SDS_AWAIT:
-    if (data == 0xFF && sd->timeoutTicks > 0) {
+      sd->state = SDS_AWAIT_RECEIVE;
+      sd->timeoutTicks = SD_TIMEOUT_TICKS;
+      /* !!CASE FALLTHROUGH!! */
+    }
+  }
+
+  /* !!CASE FALLTHROUGH!! */
+  case SDS_AWAIT_RECEIVE:
+    if (data == 0xFF && sd->rxBytesLeft != 0 && sd->timeoutTicks != 0) {
     // awaiting response
       sd->timeoutTicks -= 1;
       RawComm_SD_Poke(sd, 0xFF);
       break;
+    } else {
+    // response received or timed out
+      /* !!CASE FALLTHROUGH!! */
     }
 
-    // response received or timed out
-    sd->state = SDS_RECEIVE;
-    /* !!CASE FALL-THROUGH!! */
-
-  /* !!CASE FALL-THROUGH!! */
+  /* !!CASE FALLTHROUGH!! */
   case SDS_RECEIVE:
-    if (sd->rxBytesLeft == 0 || sd->timeoutTicks == 0) {
+    if (sd->rxBytesLeft != 0 && sd->timeoutTicks != 0) {
+      CircleBuffer_Write(&sd->buffer, &data, 1);
+      sd->rxBytesLeft -= 1;
+      RawComm_SD_Poke(sd, 0xFF);
+    } else {
       uint8_t silence = 0xFF;
       while (sd->rxBytesLeft > 0) {
-        CircleBuffer_Write(&sd->rx, &silence, 1);
+        CircleBuffer_Write(&sd->buffer, &silence, 1);
         sd->rxBytesLeft -= 1;
       }
 
-      sd->state = SDS_IDLE;
-      EventBus_Signal(sd->responseBus, sd->responseEvent);
-    } else {
-      if (CircleBuffer_Write(&sd->rx, &data, 1)) {
-        sd->rxBytesLeft -= 1;
-      } else {
-        sd->overflow = true;
-        sd->state = SDS_IDLE;
-        EventBus_Signal(&sd->bus, EVT_SD_RESET);
-      }
+      sd->state = SDS_AWAIT_TRANSMIT;
+      sd->timeoutTicks = SD_TIMEOUT_TICKS;
+      SD_DoNext(sd);
     }
-
-    RawComm_SD_Poke(sd, 0xFF);
     break;
 
   default:
-    EventBus_Signal(&sd->bus, EVT_SD_RESET);
     break;
   }
 }

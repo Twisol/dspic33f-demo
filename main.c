@@ -65,7 +65,9 @@ void buttonHandler(AppState* self) {
   uint8_t buf[17];
   uint8_t* res = uitoa(self->count, buf, 17);
   if (res != 0) {
-    UART_PutString(&self->dev.uart, res, 17 - (res - buf));
+    LCD_PutString(res);
+
+    UART_PutString(&self->dev.uart, res, 16-(res-buf));
     UART_PutString(&self->dev.uart, "\r\n", 2);
   }
 }
@@ -107,15 +109,18 @@ void inputHandler(AppState* self) {
 }
 
 
+static uint8_t sector[512];
 bool MainState(AppState* self, Event ev) {
   switch (ev) {
   // Application events
   case EVT_TIMER1:
     timerHandler(self);
     break;
+
   case EVT_BUTTON:
     buttonHandler(self);
     break;
+
   case EVT_UART:
     inputHandler(self);
     break;
@@ -123,11 +128,11 @@ bool MainState(AppState* self, Event ev) {
   // Filesystem driver events (but the FS module doesn't exist yet)
   case EVT_SD_READY:
     UART_PutString(&self->dev.uart, "Success!\r\n", 10);
+    SD_GetSector(&self->dev.sd, 0, sector, &self->eventBus, EVT_SD_SECTOR);
     break;
 
-  // RawComm-level events
-  case EVTBUS_SD:
-    SD_ProcessEvents(&self->dev.sd);
+  case EVT_SD_SECTOR:
+    UART_PutString(&self->dev.uart, sector, 512);
     break;
 
   case EVT_IGNORE:
@@ -141,10 +146,7 @@ int main() {
   EventBus_Init(&app.eventBus, NULL, 0);
 
   // Initialize SD state
-  SD_Init(&app.dev.sd, &app.eventBus, EVTBUS_SD);
-  app.dev.sd.clientBus = &app.eventBus;
-  app.dev.sd.evt_READY = EVT_SD_READY;
-  app.dev.sd.evt_RX_OVERFLOW = EVT_SD_OVERFLOW;
+  SD_Init(&app.dev.sd);
 
   // Initialize timer state
   Defer_Init(&app.dev.defer, 1000/*us*/);
@@ -153,9 +155,6 @@ int main() {
   app.dev.buttons.bus = &app.eventBus;
   app.dev.buttons.evt_CHANGE = EVT_BUTTON;
 
-  // Initialize LCD state
-  LCD_Init(LCD_DISPLAY_NO_CURSOR, LCD_CURSOR_RIGHT, LCD_SHIFT_DISPLAY_OFF);
-
   // Initialize UART state
   app.dev.uart.bus = &app.eventBus;
   app.dev.uart.evt_RX = EVT_UART;
@@ -163,7 +162,8 @@ int main() {
 
   // Begin peripheral communications
   RawComm_Init(&app.dev);
-  SD_Reset(&app.dev.sd);
+  LCD_Init(LCD_DISPLAY_NO_CURSOR, LCD_CURSOR_RIGHT, LCD_SHIFT_DISPLAY_OFF);
+  SD_Reset(&app.dev.sd, &app.eventBus, EVT_SD_READY);
   Defer_Set(&app.dev.defer, 500, &app.eventBus, EVT_TIMER1, NULL);
 
   while(1) {
