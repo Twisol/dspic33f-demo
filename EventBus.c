@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 
-void EventBus_Init(EventBus* self, EventBus* master, Event masterEvent) {
+void EventBus_Init(EventBus* self, EventBus* master, event_t masterEvent) {
   memset(self, 0, sizeof(EventBus));
   self->master = master;
   self->masterEvent = masterEvent;

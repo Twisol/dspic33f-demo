@@ -48,7 +48,7 @@ typedef struct SdInterface {
 
   // Temporary data for use during action flows
   EventBus* responseBus; // Flow completion target
-  Event responseEvent;   // Flow completion event
+  event_t responseEvent;   // Flow completion event
 
   uint8_t flow_type;
   union {
@@ -63,8 +63,8 @@ typedef struct SdInterface {
 
 // Exported API
 bool SD_Init(SdInterface* sd);
-bool SD_Reset(SdInterface* sd, EventBus* bus, Event evt);
-bool SD_GetSector(SdInterface* sd, uint16_t sector, uint8_t buf[512], EventBus* bus, Event evt);
+bool SD_Reset(SdInterface* sd, EventBus* bus, event_t evt);
+bool SD_GetSector(SdInterface* sd, uint16_t sector, uint8_t buf[512], EventBus* bus, event_t evt);
 
 void SD_RecvRaw(SdInterface* sd, uint8_t data);
 

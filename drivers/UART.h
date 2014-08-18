@@ -9,7 +9,7 @@
 
 typedef struct UartBuffer {
   EventBus* bus;
-  Event evt_RX;
+  event_t evt_RX;
 
   CircleBuffer rx;
   CircleBuffer tx;

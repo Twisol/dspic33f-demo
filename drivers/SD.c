@@ -80,7 +80,7 @@ void SD_TransmitCmd(SdInterface* self, struct SdCommand cmd, uint8_t recvLength)
   RawComm_SD_Poke(self, 0xFF);
 }
 
-bool SD_GetSector(SdInterface* self, uint16_t sector, uint8_t buf[512], EventBus* bus, Event evt) {
+bool SD_GetSector(SdInterface* self, uint16_t sector, uint8_t buf[512], EventBus* bus, event_t evt) {
   if (self->flow_type != SDF_IDLE) {
     return false;
   }
@@ -185,7 +185,7 @@ void SD_DoNext(SdInterface* sd) {
   }
 }
 
-bool SD_Reset(SdInterface* sd, EventBus* bus, Event evt) {
+bool SD_Reset(SdInterface* sd, EventBus* bus, event_t evt) {
   if (sd->flow_type != SDF_IDLE) {
     return false;
   }

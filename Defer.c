@@ -13,7 +13,7 @@ void Defer_Init(DeferTable* self, uint16_t clockPeriod) {
   memset((DeferEntry*)self->entries, 0, self->size*sizeof(DeferEntry));
 }
 
-bool Defer_Set(DeferTable* self, uint16_t ticks, EventBus* target, Event ev, uint8_t* id) {
+bool Defer_Set(DeferTable* self, uint16_t ticks, EventBus* target, event_t ev, uint8_t* id) {
   uint8_t idx;
   for (idx = 0; idx < self->size; ++idx) {
     if (self->entries[idx].countdown != 0) {

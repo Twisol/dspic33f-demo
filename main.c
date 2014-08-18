@@ -110,7 +110,7 @@ void inputHandler(AppState* self) {
 
 
 static uint8_t sector[512];
-bool MainState(AppState* self, Event ev) {
+bool MainState(AppState* self, event_t ev) {
   switch (ev) {
   // Application events
   case EVT_TIMER1:
