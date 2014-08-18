@@ -3,8 +3,8 @@
 #include "../CircleBuffer.h"
 #include "../RawComm.h"  // Debugging
 
-struct SdCommand SdCommand(uint8_t index, uint8_t arg3, uint8_t arg2, uint8_t arg1, uint8_t arg0) {
-  struct SdCommand cmd = {index, arg3, arg2, arg1, arg0};
+sd_command_t sd_command(uint8_t index, uint8_t arg3, uint8_t arg2, uint8_t arg1, uint8_t arg0) {
+  sd_command_t cmd = {index, arg3, arg2, arg1, arg0};
   return cmd;
 }
 
@@ -46,7 +46,7 @@ uint8_t responseLength(sd_response_t type) {
   }
 }
 
-uint8_t genCRC(struct SdCommand cmd) {
+uint8_t genCRC(sd_command_t cmd) {
   switch (cmd.index) {
   case 0:
     return 0x4A;
@@ -65,7 +65,7 @@ bool SD_Init(SdInterface* self) {
   self->flow_type = SDF_IDLE;
 }
 
-void SD_TransmitCmd(SdInterface* self, struct SdCommand cmd, uint8_t recvLength) {
+void SD_TransmitCmd(SdInterface* self, sd_command_t cmd, uint8_t recvLength) {
   uint8_t mem[] = {
     (cmd.index | 0x40) &~ 0x80,
     cmd.arg3, cmd.arg2, cmd.arg1, cmd.arg0,
@@ -112,7 +112,7 @@ void SD_ResetFlow(SdInterface* sd) {
   case 0:
     RawComm_SD_CardSelect(sd, true);
 
-    SD_TransmitCmd(sd, SdCommand(0, 0x00, 0x00, 0x00, 0x00), 1);
+    SD_TransmitCmd(sd, sd_command(0, 0x00, 0x00, 0x00, 0x00), 1);
     *state = 1;
     break;
 
@@ -121,10 +121,10 @@ void SD_ResetFlow(SdInterface* sd) {
     CircleBuffer_Read(&sd->buffer, &response, 1);
 
     if (response != 0x01) {
-      SD_TransmitCmd(sd, SdCommand(0, 0x00, 0x00, 0x00, 0x00), 1);
+      SD_TransmitCmd(sd, sd_command(0, 0x00, 0x00, 0x00, 0x00), 1);
       *state = 1;
     } else {
-      SD_TransmitCmd(sd, SdCommand(8, 0x00, 0x00, 0x01, 0xAA), 5);
+      SD_TransmitCmd(sd, sd_command(8, 0x00, 0x00, 0x01, 0xAA), 5);
       *state = 3;
     }
     break;

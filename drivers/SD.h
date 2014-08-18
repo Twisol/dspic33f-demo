@@ -22,15 +22,14 @@ typedef enum sd_response_t {
   SDR_R7,
 } sd_response_t;
 
-struct SdCommand {
+typedef struct sd_command_t {
   unsigned : 2;
   unsigned index : 6; // Command index
   unsigned arg3 : 8;  // MSB of argument
   unsigned arg2 : 8;
   unsigned arg1 : 8;
   unsigned arg0 : 8;  // LSB of argument
-};
-struct SdCommand SdCommand(uint8_t index, uint8_t arg3, uint8_t arg2, uint8_t arg1, uint8_t arg0);
+} sd_command_t;
 
 typedef enum sd_flow_type_t {
   SDF_IDLE = 0,
