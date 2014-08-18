@@ -18,7 +18,7 @@ void UART_PutChar(UartBuffer* self, uint8_t ch) {
 }
 
 void UART_PutString(UartBuffer* self, const uint8_t* buf, uint16_t len) {
-  uint8_t idx;
+  uint16_t idx;
   for (idx = 0; idx < len; ++idx) {
     UART_PutChar(self, buf[idx]);
   }
