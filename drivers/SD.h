@@ -7,7 +7,7 @@
 #define SD_TIMEOUT_TICKS ((uint8_t)8)
 
 typedef enum sd_state_t {
-  SDS_AWAIT_TRANSMIT = 0,
+  SDS_IDLE = 0,
   SDS_TRANSMIT,
   SDS_AWAIT_RECEIVE,
   SDS_RECEIVE,
@@ -34,6 +34,8 @@ typedef struct sd_command_t {
 typedef enum sd_flow_type_t {
   SDF_IDLE = 0,
   SDF_RESET,
+  SDF_READ_SINGLE,
+  SDF_WRITE_SINGLE,
 } sd_flow_type_t;
 
 
@@ -43,6 +45,7 @@ typedef struct SdInterface {
   CircleBuffer buffer;
   uint8_t rxBytesLeft;
   uint8_t txBytesLeft;
+  uint8_t timeoutCount;
   uint8_t timeoutTicks;
 
   // Temporary data for use during action flows
@@ -51,19 +54,36 @@ typedef struct SdInterface {
 
   uint8_t flow_type;
   union {
-    uint8_t idle_flow; // dummy variable
+    struct {
+      uint8_t state;
+    } idle_flow;
+
     struct {
       uint8_t state;
     } reset_flow;
-    struct {} cmd_flow;
-    struct {} acmd_flow;
+
+    struct {
+      uint8_t state;
+      uint32_t sector;
+      uint8_t* buffer;
+      uint16_t i;
+    } read_single_flow;
+
+    struct {
+      uint8_t state;
+      uint32_t sector;
+      const uint8_t* buffer;
+      uint16_t i;
+    } write_single_flow;
   };
 } SdInterface;
 
 // Exported API
 bool SD_Init(SdInterface* sd);
+
 bool SD_Reset(SdInterface* sd, EventBus* bus, event_t evt);
-bool SD_GetSector(SdInterface* sd, uint16_t sector, uint8_t buf[512], EventBus* bus, event_t evt);
+bool SD_GetSector(SdInterface* sd, uint32_t sector, uint8_t buf[512], EventBus* bus, event_t evt);
+bool SD_PutSector(SdInterface* sd, uint32_t sector, const uint8_t buf[512], EventBus* bus, event_t evt);
 
 void SD_RecvRaw(SdInterface* sd, uint8_t data);
 

@@ -10,7 +10,9 @@ typedef enum event_class_t {
   EVT_TIMER1,
 
   EVT_SD_READY,
-  EVT_SD_SECTOR,
+  EVT_SD_MBR,
+  EVT_SD_PARTITION,
+   EVT_SD_ROOT,
 } event_class_t;
 
 #endif	/* EVENTTYPES_H */

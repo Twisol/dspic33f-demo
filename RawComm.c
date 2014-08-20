@@ -168,10 +168,6 @@ void RawComm_SD_Init() {
   IEC2bits.SPI2IE = 0b1;
 }
 
-uint8_t RawComm_SD_Peek(SdInterface* sd) {
-  return SPI2BUF;
-}
-
 void RawComm_SD_Poke(SdInterface* sd, uint8_t data) {
   SPI2BUF = data;
 }
@@ -188,6 +184,7 @@ bool RawComm_SD_CardSelect(SdInterface* sd, bool enabled) {
   LATBbits.LATB9 = (enabled) ? 0 : 1; // Chip Select (On)
 }
 
+uint8_t* uitoab(uint16_t num, uint16_t base, uint8_t* buf, uint16_t len);
 void __attribute__((interrupt,no_auto_psv)) _SPI2Interrupt() {
   if (IFS2bits.SPI2IF == 0b0) {
     return;
@@ -195,6 +192,13 @@ void __attribute__((interrupt,no_auto_psv)) _SPI2Interrupt() {
   IFS2bits.SPI2IF = 0b0;
 
   uint8_t data = SPI2BUF;
+
+  // Debugging
+  uint8_t hex[] = "00";
+  uitoab(data, 16, hex, 3);
+  UART_PutString(&_InterruptGetRawComm()->uart, hex, 2);
+  UART_PutString(&_InterruptGetRawComm()->uart, " ", 1);
+
   SD_RecvRaw(&_InterruptGetRawComm()->sd, data);
 }
 
