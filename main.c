@@ -14,6 +14,7 @@
 #include "drivers/LED.h"
 #include "drivers/PushButtons.h"
 #include "drivers/UART.h"
+#include "drivers/SD.h"
 
 
 uint8_t digit_to_char[] = {
@@ -171,7 +172,7 @@ bool MainState(AppState* self, event_t ev) {
     switch (sd_result) {
     case SDR_OK:
       print("Success!\r\n");
-      SD_GetSector(&self->dev.sd, 0ul, sector, &self->eventBus, EVT_SD_MBR, &sd_result);
+      SD_GetSector(&self->dev.sd, 0ul, sector, mailbox(&self->eventBus, EVT_SD_MBR), &sd_result);
       break;
 
     case SDR_DEAD:
@@ -214,7 +215,7 @@ bool MainState(AppState* self, event_t ev) {
       if (partitions[0].filesystem_type != 0x06){
         print("FS not FAT16\r\n");
       } else {
-        SD_GetSector(&self->dev.sd, partitions[0].mbr_offset, sector, &self->eventBus, EVT_SD_PARTITION, &sd_result);
+        SD_GetSector(&self->dev.sd, partitions[0].mbr_offset, sector, mailbox(&self->eventBus, EVT_SD_PARTITION), &sd_result);
       }
       break;
     }
@@ -263,7 +264,8 @@ bool MainState(AppState* self, event_t ev) {
           + boot.reserved_sector_count
           + boot.sectors_per_fat * boot.fat_count,
           sector,
-          &self->eventBus, EVT_SD_ROOT, &sd_result
+          mailbox(&self->eventBus, EVT_SD_ROOT),
+          &sd_result
         );
       }
       break;
@@ -340,14 +342,12 @@ int main() {
   app.dev.buttons.evt_CHANGE = EVT_BUTTON;
 
   // Initialize UART state
-  app.dev.uart.bus = &app.eventBus;
-  app.dev.uart.evt_RX = EVT_UART;
-  UART_Init(&app.dev.uart);
+  UART_Init(&app.dev.uart, mailbox(&app.eventBus, EVT_UART));
 
   // Begin peripheral communications
   RawComm_Init(&app.dev);
   // LCD_Init(LCD_DISPLAY_NO_CURSOR, LCD_CURSOR_RIGHT, LCD_SHIFT_DISPLAY_OFF);
-  SD_Reset(&app.dev.sd, &app.eventBus, EVT_SD_READY, &sd_result);
+  SD_Reset(&app.dev.sd, mailbox(&app.eventBus, EVT_SD_READY), &sd_result);
   Defer_Set(&app.dev.defer, 500, &app.eventBus, EVT_TIMER1, NULL);
 
   while(1) {

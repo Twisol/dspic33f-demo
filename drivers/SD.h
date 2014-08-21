@@ -39,43 +39,45 @@ typedef struct SdInterface {
   uint8_t timeoutCount;
   uint8_t timeoutTicks;
 
-  // Temporary data for use during action flows
-  EventBus* responseBus;  // Flow completion target
-  event_t responseEvent;  // Flow completion event
+  mailbox_t responder;
   sd_result_t* responseResult;
 
+  // Temporary data for use during action flows
   sd_flow_type_t flow_type;
   uint8_t flow_state;
   union {
-    struct {} idle_flow;
-    struct {} reset_flow;
+    struct {} idle;
+    struct {} reset;
 
     struct {
       uint32_t sector;
       uint8_t* buffer;
       uint16_t i;
-    } read_single_flow;
+    } read_single;
 
     struct {
       uint32_t sector;
       const uint8_t* buffer;
       uint16_t i;
-    } write_single_flow;
-  };
+    } write_single;
+  } flow;
 } SdInterface;
 
 // Exported API
 bool SD_Init(SdInterface* sd);
+bool SD_CardDetected(SdInterface* sd);
+bool SD_WriteProtected(SdInterface* sd);
 
-bool SD_Reset(SdInterface* sd, EventBus* bus, event_t evt, sd_result_t* result);
-bool SD_GetSector(SdInterface* sd, uint32_t sector, uint8_t buf[512], EventBus* bus, event_t evt, sd_result_t* result);
-bool SD_PutSector(SdInterface* sd, uint32_t sector, const uint8_t buf[512], EventBus* bus, event_t evt, sd_result_t* result);
+bool SD_Reset(SdInterface* sd, mailbox_t responder, sd_result_t* result);
+bool SD_GetSector(SdInterface* sd, uint32_t sector, uint8_t buf[512], mailbox_t responder, sd_result_t* result);
+bool SD_PutSector(SdInterface* sd, uint32_t sector, const uint8_t buf[512], mailbox_t responder, sd_result_t* result);
 
 void SD_RecvRaw(SdInterface* sd, uint8_t data);
 
 // Imported API
 uint8_t RawComm_SD_Peek(SdInterface* sd);
 void RawComm_SD_Poke(SdInterface* sd, uint8_t data);
+bool RawComm_SD_CardSelect(SdInterface* sd, bool enabled);
 bool RawComm_SD_CardDetected(SdInterface* sd);
 bool RawComm_SD_WriteProtected(SdInterface* sd);
 

@@ -3,10 +3,12 @@
 #include <stdbool.h>
 
 #include "../CircleBuffer.h"
+#include "../EventBus.h"
 
-void UART_Init(UartBuffer* self) {
+void UART_Init(UartBuffer* self, mailbox_t onRX) {
   CircleBuffer_Init(&self->rx);
   CircleBuffer_Init(&self->tx);
+  self->onRX = onRX;
 }
 
 void UART_PutChar(UartBuffer* self, uint8_t ch) {
@@ -39,7 +41,7 @@ uint16_t UART_GetCount(UartBuffer* self) {
 
 bool UART_RecvRaw(UartBuffer* self, uint8_t ch) {
   if (UART_GetCount(self) == 0) {
-    EventBus_Signal(self->bus, self->evt_RX);
+    Mailbox_Deliver(self->onRX);
   }
 
   return CircleBuffer_Write(&self->rx, &ch, 1);

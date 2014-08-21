@@ -28,3 +28,6 @@ void EventBus_Signal(EventBus* self, uint8_t type) {
     EventBus_Signal(self->master, self->masterEvent);
   }
 }
+
+extern inline mailbox_t mailbox(EventBus* target, event_t event);
+extern inline void Mailbox_Deliver(mailbox_t mailbox);

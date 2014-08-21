@@ -1,5 +1,6 @@
 #include "SD.h"
 
+#include "../EventBus.h"
 #include "../CircleBuffer.h"
 
 
@@ -11,28 +12,28 @@ typedef struct sd_command_t {
   unsigned arg0 : 8;  // LSB of argument
 } sd_command_t;
 
-inline
+static inline
 sd_command_t sd_command(uint8_t index, uint8_t arg3, uint8_t arg2, uint8_t arg1, uint8_t arg0) {
   sd_command_t cmd = {index, arg3, arg2, arg1, arg0};
   return cmd;
 }
 
-inline
+static inline
 sd_command_t cmd_go_idle_state() {
   return sd_command(0, 0x00, 0x00, 0x00, 0x00);
 }
 
-inline
+static inline
 sd_command_t cmd_send_if_cond(uint8_t pattern) {
   return sd_command(8, 0x00, 0x00, 0x01, pattern);
 }
 
-inline
+static inline
 sd_command_t cmd_app_cmd() {
   return sd_command(55, 0x00, 0x00, 0x00, 0x00);
 }
 
-inline
+static inline
 sd_command_t cmd_read_single_block(uint32_t address) {
   return sd_command(17,
     (address & 0xFF000000) >> 24,
@@ -42,7 +43,7 @@ sd_command_t cmd_read_single_block(uint32_t address) {
   );
 }
 
-inline
+static inline
 sd_command_t cmd_write_single_block(uint32_t address) {
   return sd_command(24,
     (address & 0xFF000000) >> 24,
@@ -52,13 +53,13 @@ sd_command_t cmd_write_single_block(uint32_t address) {
   );
 }
 
-inline
+static inline
 sd_command_t acmd_sd_send_op_cond() {
   return sd_command(41, 0x00, 0x00, 0x00, 0x00);
 };
 
 
-inline
+static inline
 uint8_t cmdCRC(sd_command_t cmd) {
   switch (cmd.index) {
   case 0:
@@ -70,7 +71,7 @@ uint8_t cmdCRC(sd_command_t cmd) {
   }
 }
 
-inline
+static inline
 uint16_t sectorCRC(const uint8_t sector[512]) {
   return 0x55;
 }
@@ -185,7 +186,7 @@ void SD_ResetFlow(SdInterface* sd) {
       sd->flow_state = 0;
 
       *sd->responseResult = SDR_DEAD;
-      EventBus_Signal(sd->responseBus, sd->responseEvent);
+      Mailbox_Deliver(sd->responder);
       break;
     }
 
@@ -196,7 +197,7 @@ void SD_ResetFlow(SdInterface* sd) {
       sd->flow_state = 0;
 
       *sd->responseResult = SDR_COMPAT;
-      EventBus_Signal(sd->responseBus, sd->responseEvent);
+      Mailbox_Deliver(sd->responder);
       break;
     }
 
@@ -207,7 +208,7 @@ void SD_ResetFlow(SdInterface* sd) {
       sd->flow_state = 0;
 
       *sd->responseResult = SDR_COMPAT;
-      EventBus_Signal(sd->responseBus, sd->responseEvent);
+      Mailbox_Deliver(sd->responder);
       break;
     }
 
@@ -218,7 +219,7 @@ void SD_ResetFlow(SdInterface* sd) {
       sd->flow_state = 0;
 
       *sd->responseResult = SDR_COMPAT;
-      EventBus_Signal(sd->responseBus, sd->responseEvent);
+      Mailbox_Deliver(sd->responder);
       break;
     }
 
@@ -246,7 +247,7 @@ void SD_ResetFlow(SdInterface* sd) {
       sd->flow_state = 0;
 
       *sd->responseResult = SDR_OK;
-      EventBus_Signal(sd->responseBus, sd->responseEvent);
+      Mailbox_Deliver(sd->responder);
     } else {
       sd->flow_state = 4;
       SD_TransmitCmd(sd, cmd_app_cmd(), 1, 8);
@@ -264,7 +265,7 @@ void SD_ReadSingleFlow(SdInterface* sd) {
   case 0: {
     RawComm_SD_CardSelect(sd, true);
 
-    SD_TransmitCmd(sd, cmd_read_single_block(sd->read_single_flow.sector), 1, 8);
+    SD_TransmitCmd(sd, cmd_read_single_block(sd->flow.read_single.sector), 1, 8);
     sd->flow_state = 1;
     break;
   }
@@ -297,11 +298,11 @@ void SD_ReadSingleFlow(SdInterface* sd) {
 
     uint8_t i;
     for (i = 0; i < 16; ++i) {
-      sd->read_single_flow.buffer[sd->read_single_flow.i + i] = response[i];
+      sd->flow.read_single.buffer[sd->flow.read_single.i + i] = response[i];
     }
-    sd->read_single_flow.i += 16;
+    sd->flow.read_single.i += 16;
 
-    if (sd->read_single_flow.i == 512) {
+    if (sd->flow.read_single.i == 512) {
       SD_ReceiveNoWait(sd, 2);
       sd->flow_state = 4;
     } else {
@@ -319,7 +320,7 @@ void SD_ReadSingleFlow(SdInterface* sd) {
     sd->flow_state = 0;
 
     *sd->responseResult = SDR_OK;
-    EventBus_Signal(sd->responseBus, sd->responseEvent);
+    Mailbox_Deliver(sd->responder);
     break;
   }
 
@@ -333,7 +334,7 @@ void SD_WriteSingleFlow(SdInterface* sd) {
   case 0: { // Send command
     RawComm_SD_CardSelect(sd, true);
 
-    SD_TransmitCmd(sd, cmd_write_single_block(sd->write_single_flow.sector), 1, 8);
+    SD_TransmitCmd(sd, cmd_write_single_block(sd->flow.write_single.sector), 1, 8);
     sd->flow_state = 1;
     break;
   }
@@ -348,7 +349,7 @@ void SD_WriteSingleFlow(SdInterface* sd) {
       sd->flow_state = 0;
 
       *sd->responseResult = SDR_BUSY;
-      EventBus_Signal(sd->responseBus, sd->responseEvent);
+      Mailbox_Deliver(sd->responder);
     } else {
       uint8_t start_block = 0xFE;
       SD_Transmit(sd, &start_block, 1);
@@ -359,17 +360,17 @@ void SD_WriteSingleFlow(SdInterface* sd) {
   }
 
   case 2: { // Send block
-    SD_Transmit(sd, sd->write_single_flow.buffer + sd->write_single_flow.i, 16);
-    sd->write_single_flow.i += 16;
+    SD_Transmit(sd, sd->flow.write_single.buffer + sd->flow.write_single.i, 16);
+    sd->flow.write_single.i += 16;
 
-    if (sd->write_single_flow.i == 512) {
+    if (sd->flow.write_single.i == 512) {
       sd->flow_state = 3;
     }
     break;
   }
 
   case 3: { // Send CDC
-    uint16_t crc = sectorCRC(sd->write_single_flow.buffer);
+    uint16_t crc = sectorCRC(sd->flow.write_single.buffer);
     uint8_t bytes[2] = {(crc & 0xFF00) >> 8, (crc & 0x00FF)};
     SD_Transmit(sd, bytes, 2);
     sd->flow_state = 4;
@@ -398,7 +399,7 @@ void SD_WriteSingleFlow(SdInterface* sd) {
       sd->flow_state = 0;
 
       *sd->responseResult = SDR_CRC;
-      EventBus_Signal(sd->responseBus, sd->responseEvent);
+      Mailbox_Deliver(sd->responder);
       break;
 
     case 0b110:
@@ -407,7 +408,7 @@ void SD_WriteSingleFlow(SdInterface* sd) {
       sd->flow_state = 0;
 
       *sd->responseResult = SDR_FAULT;
-      EventBus_Signal(sd->responseBus, sd->responseEvent);
+      Mailbox_Deliver(sd->responder);
       break;
     }
 
@@ -426,7 +427,7 @@ void SD_WriteSingleFlow(SdInterface* sd) {
       sd->flow_state = 0;
 
       *sd->responseResult = SDR_OK;
-      EventBus_Signal(sd->responseBus, sd->responseEvent);
+      Mailbox_Deliver(sd->responder);
     }
     break;
   }
@@ -457,7 +458,7 @@ void SD_DoNext(SdInterface* sd) {
 }
 
 
-bool SD_Reset(SdInterface* sd, EventBus* bus, event_t evt, sd_result_t* result) {
+bool SD_Reset(SdInterface* sd, mailbox_t responder, sd_result_t* result) {
   if (sd->flow_type != SDF_IDLE) {
     return false;
   }
@@ -465,8 +466,7 @@ bool SD_Reset(SdInterface* sd, EventBus* bus, event_t evt, sd_result_t* result) 
   sd->flow_type = SDF_RESET;
   sd->flow_state = 0;
 
-  sd->responseBus = bus;
-  sd->responseEvent = evt;
+  sd->responder = responder;
   sd->responseResult = result;
 
   *result = SDR_INPROGRESS;
@@ -474,7 +474,7 @@ bool SD_Reset(SdInterface* sd, EventBus* bus, event_t evt, sd_result_t* result) 
   return true;
 }
 
-bool SD_GetSector(SdInterface* sd, uint32_t sector, uint8_t buf[512], EventBus* bus, event_t evt, sd_result_t* result) {
+bool SD_GetSector(SdInterface* sd, uint32_t sector, uint8_t buf[512], mailbox_t responder, sd_result_t* result) {
   if (sd->flow_type != SDF_IDLE) {
     return false;
   }
@@ -482,12 +482,11 @@ bool SD_GetSector(SdInterface* sd, uint32_t sector, uint8_t buf[512], EventBus* 
   sd->flow_type = SDF_READ_SINGLE;
   sd->flow_state = 0;
 
-  sd->read_single_flow.sector = sector * 512ul; // address space translation
-  sd->read_single_flow.buffer = buf;
-  sd->read_single_flow.i = 0;
+  sd->flow.read_single.sector = sector * 512ul; // address space translation
+  sd->flow.read_single.buffer = buf;
+  sd->flow.read_single.i = 0;
 
-  sd->responseBus = bus;
-  sd->responseEvent = evt;
+  sd->responder = responder;
   sd->responseResult = result;
 
   *result = SDR_INPROGRESS;
@@ -495,7 +494,7 @@ bool SD_GetSector(SdInterface* sd, uint32_t sector, uint8_t buf[512], EventBus* 
   return true;
 }
 
-bool SD_PutSector(SdInterface* sd, uint32_t sector, const uint8_t buf[512], EventBus* bus, event_t evt, sd_result_t* result) {
+bool SD_PutSector(SdInterface* sd, uint32_t sector, const uint8_t buf[512], mailbox_t responder, sd_result_t* result) {
   if (sd->flow_type != SDF_IDLE) {
     return false;
   }
@@ -503,12 +502,11 @@ bool SD_PutSector(SdInterface* sd, uint32_t sector, const uint8_t buf[512], Even
   sd->flow_type = SDF_WRITE_SINGLE;
   sd->flow_state = 0;
 
-  sd->write_single_flow.sector = sector * 512ul; // address space translation
-  sd->write_single_flow.buffer = buf;
-  sd->write_single_flow.i = 0;
+  sd->flow.write_single.sector = sector * 512ul; // address space translation
+  sd->flow.write_single.buffer = buf;
+  sd->flow.write_single.i = 0;
 
-  sd->responseBus = bus;
-  sd->responseEvent = evt;
+  sd->responder = responder;
   sd->responseResult = result;
 
   *result = SDR_INPROGRESS;

@@ -5,7 +5,6 @@
 #include <stddef.h>
 
 #include <xc.h>            /* Register access */
-#include <libpic30.h>      /* __delay32 and friends */
 
 #include "EventBus.h"
 #include "CircleBuffer.h"
@@ -21,6 +20,9 @@
 #define BAUD_RATE 9600
 #define CLOCK_PERIOD 1000 /* microseconds */
 
+extern void __delay32(unsigned long cycles); // from libpic30
+static inline void __delay_ms(uint32_t ms) { __delay32(ms*FCY/1000ull); }
+static inline void __delay_us(uint32_t us) { __delay32(us*FCY/1000000ull); }
 
 
 void RawComm_LCD_Init() {
