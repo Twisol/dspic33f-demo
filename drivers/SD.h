@@ -6,6 +6,16 @@
 
 #define SD_TIMEOUT_TICKS ((uint8_t)8)
 
+typedef enum sd_result_t {
+  SDR_OK = 0,
+  SDR_INPROGRESS,
+  SDR_DEAD,
+  SDR_BUSY,
+  SDR_COMPAT,
+  SDR_CRC,
+  SDR_FAULT,
+} sd_result_t;
+
 typedef enum sd_state_t {
   SDS_IDLE = 0,
   SDS_TRANSMIT,
@@ -13,31 +23,12 @@ typedef enum sd_state_t {
   SDS_RECEIVE,
 } sd_state_t;
 
-typedef enum sd_response_t {
-  SDR_INVALID = 0,
-  SDR_R1,
-  SDR_R1b,
-  SDR_R2,
-  SDR_R3,
-  SDR_R7,
-} sd_response_t;
-
-typedef struct sd_command_t {
-  unsigned : 2;
-  unsigned index : 6; // Command index
-  unsigned arg3 : 8;  // MSB of argument
-  unsigned arg2 : 8;
-  unsigned arg1 : 8;
-  unsigned arg0 : 8;  // LSB of argument
-} sd_command_t;
-
 typedef enum sd_flow_type_t {
   SDF_IDLE = 0,
   SDF_RESET,
   SDF_READ_SINGLE,
   SDF_WRITE_SINGLE,
 } sd_flow_type_t;
-
 
 typedef struct SdInterface {
   // Driver state and orchestration
@@ -49,28 +40,23 @@ typedef struct SdInterface {
   uint8_t timeoutTicks;
 
   // Temporary data for use during action flows
-  EventBus* responseBus; // Flow completion target
-  event_t responseEvent;   // Flow completion event
+  EventBus* responseBus;  // Flow completion target
+  event_t responseEvent;  // Flow completion event
+  sd_result_t* responseResult;
 
-  uint8_t flow_type;
+  sd_flow_type_t flow_type;
+  uint8_t flow_state;
   union {
-    struct {
-      uint8_t state;
-    } idle_flow;
+    struct {} idle_flow;
+    struct {} reset_flow;
 
     struct {
-      uint8_t state;
-    } reset_flow;
-
-    struct {
-      uint8_t state;
       uint32_t sector;
       uint8_t* buffer;
       uint16_t i;
     } read_single_flow;
 
     struct {
-      uint8_t state;
       uint32_t sector;
       const uint8_t* buffer;
       uint16_t i;
@@ -81,9 +67,9 @@ typedef struct SdInterface {
 // Exported API
 bool SD_Init(SdInterface* sd);
 
-bool SD_Reset(SdInterface* sd, EventBus* bus, event_t evt);
-bool SD_GetSector(SdInterface* sd, uint32_t sector, uint8_t buf[512], EventBus* bus, event_t evt);
-bool SD_PutSector(SdInterface* sd, uint32_t sector, const uint8_t buf[512], EventBus* bus, event_t evt);
+bool SD_Reset(SdInterface* sd, EventBus* bus, event_t evt, sd_result_t* result);
+bool SD_GetSector(SdInterface* sd, uint32_t sector, uint8_t buf[512], EventBus* bus, event_t evt, sd_result_t* result);
+bool SD_PutSector(SdInterface* sd, uint32_t sector, const uint8_t buf[512], EventBus* bus, event_t evt, sd_result_t* result);
 
 void SD_RecvRaw(SdInterface* sd, uint8_t data);
 
