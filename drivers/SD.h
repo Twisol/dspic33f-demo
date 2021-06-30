@@ -30,6 +30,10 @@ typedef enum sd_flow_type_t {
   SDF_WRITE_SINGLE,
 } sd_flow_type_t;
 
+typedef struct sector_t {
+  uint8_t data[512];
+} sector_t;
+
 typedef struct SdInterface {
   // Driver state and orchestration
   sd_state_t state;
@@ -40,7 +44,8 @@ typedef struct SdInterface {
   uint8_t timeoutTicks;
 
   mailbox_t responder;
-  sd_result_t* responseResult;
+  sd_result_t lastResult;
+  sector_t lastSector;
 
   // Temporary data for use during action flows
   sd_flow_type_t flow_type;
@@ -50,14 +55,12 @@ typedef struct SdInterface {
     struct {} reset;
 
     struct {
-      uint32_t sector;
-      uint8_t* buffer;
+      uint32_t id;
       uint16_t i;
     } read_single;
 
     struct {
-      uint32_t sector;
-      const uint8_t* buffer;
+      uint32_t id;
       uint16_t i;
     } write_single;
   } flow;
@@ -68,9 +71,17 @@ bool SD_Init(SdInterface* sd);
 bool SD_CardDetected(SdInterface* sd);
 bool SD_WriteProtected(SdInterface* sd);
 
-bool SD_Reset(SdInterface* sd, mailbox_t responder, sd_result_t* result);
-bool SD_GetSector(SdInterface* sd, uint32_t sector, uint8_t buf[512], mailbox_t responder, sd_result_t* result);
-bool SD_PutSector(SdInterface* sd, uint32_t sector, const uint8_t buf[512], mailbox_t responder, sd_result_t* result);
+bool SD_Reset(SdInterface* sd, mailbox_t responder);
+bool SD_PullSector(SdInterface* sd, uint32_t id, mailbox_t responder);
+bool SD_PushSector(SdInterface* sd, uint32_t id, mailbox_t responder);
+
+inline sd_result_t SD_GetLastResult(SdInterface* sd) {
+  return sd->lastResult;
+}
+
+inline sector_t* SD_GetSectorStorage(SdInterface* sd) {
+  return &sd->lastSector;
+}
 
 void SD_RecvRaw(SdInterface* sd, uint8_t data);
 

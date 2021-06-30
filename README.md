@@ -20,3 +20,8 @@ allocation is performed.
     event loop. Interrupt routines do the minimal amount of work necessary,
     communicating with the main thread through concurrency-safe data structures
     and the application event bus.
+
+## Known issues
+
+*   The FAT16 implementation has some unsolved bugs around reading and writing
+    files.
